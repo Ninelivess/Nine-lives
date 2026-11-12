@@ -25,7 +25,7 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
-html { scroll-snap-type: y proximity; scroll-behavior: smooth; }
+html { scroll-behavior: smooth; }
 html.intro-lock { overflow: hidden; }
 body {
   color: var(--text); font-family: var(--body); font-size: 16px; line-height: 1.55; font-weight: 600;
@@ -136,7 +136,7 @@ code { font-family: var(--mono); font-size: .85em; color: var(--ink); background
 .slot:hover .tip { opacity: 1; }
 
 /* ---------- screens ---------- */
-.screen { position: relative; min-height: 100vh; scroll-snap-align: start; padding: 110px 0 120px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+.screen { position: relative; min-height: 100vh; padding: 110px 0 120px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
 .container { width: 100%; max-width: 1240px; margin: 0 auto; padding: 0 32px; }
 .screen-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; margin-bottom: 34px; }
 .screen-kicker { display: inline-flex; align-items: center; gap: 8px; font-family: var(--label); font-size: 11px; letter-spacing: .08em; color: var(--gold); text-transform: uppercase; margin: 0 0 12px; }
@@ -306,7 +306,6 @@ a.cat-card:hover { color: var(--ink); transform: translateY(-3px); }
 }
 @media (max-width: 700px) {
   :root { --px: 2px; }
-  html { scroll-snap-type: none; }
   body { font-size: 15px; }
   .container { padding: 0 16px; }
   .hud { padding: 12px 14px; }

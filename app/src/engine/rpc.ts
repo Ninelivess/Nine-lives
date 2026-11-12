@@ -4,7 +4,7 @@
 import type { CatInfo, GameConfig, GameEvent, OfferInfo, PlotInfo, Traits, WorldView } from "./types";
 import { yoctoToMilli } from "./units";
 
-export const DEFAULT_RPC = process.env.NEXT_PUBLIC_NEAR_RPC || "https://rpc.testnet.near.org";
+export const DEFAULT_RPC = process.env.NEXT_PUBLIC_NEAR_RPC || "https://test.rpc.fastnear.com";
 export const DEFAULT_CONTRACT = process.env.NEXT_PUBLIC_CONTRACT_ID || "ninelives.testnet";
 export const NETWORK = process.env.NEXT_PUBLIC_NEAR_NETWORK || "testnet";
 

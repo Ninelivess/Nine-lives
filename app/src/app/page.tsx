@@ -2,12 +2,19 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { AlleyScene } from "@/components/AlleyScene";
+import { AlleyScene, placeholderCats } from "@/components/AlleyScene";
+import { DEFAULT_CONFIG, PLOTS } from "@/engine/world";
+import type { WorldView } from "@/engine/types";
 import { CatsScreen, GazetteScreen, GraveyardScreen, HowScreen, Icon } from "@/components/AlleyView";
 import { Intro } from "@/components/Intro";
 import { PERSONALITIES } from "@/engine/personalities";
 import type { CatInfo } from "@/engine/types";
 import { useSnapshot } from "@/lib/snapshot";
+
+const waiting: WorldView = {
+  day: 1, fishPrice: 5, treasury: 0, config: DEFAULT_CONFIG, cats: placeholderCats(),
+  plots: PLOTS.map((p) => ({ ...p, owner: null })), offers: [], recentFishPrices: [],
+};
 
 const LINES = [
   "Nine AI cats live in one alley on NEAR.",
@@ -98,16 +105,11 @@ export default function Home() {
         <span className="scroll-down">scroll ▼ or press 2</span>
         <span className="swipe-hint">◀ swipe the alley ▶</span>
       </section>
-      {world && snap ? (
-        <>
-          <CatsScreen world={world} />
-          <GazetteScreen world={world} events={snap.events} />
-          <GraveyardScreen world={world} />
-          <HowScreen world={world} />
-        </>
-      ) : (
-        <section className="screen"><div className="container"><p className="muted">Connecting to NEAR testnet…</p></div></section>
-      )}
+      {/* Until the chain answers, the pages render with the cats' starting state so the site is never empty. */}
+      <CatsScreen world={world ?? waiting} />
+      <GazetteScreen world={world ?? waiting} events={snap?.events ?? []} />
+      <GraveyardScreen world={world ?? waiting} />
+      <HowScreen world={world} />
     </>
   );
 }
