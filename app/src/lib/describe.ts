@@ -47,8 +47,10 @@ export function describe(e: GameEvent, cats: Map<number, CatInfo>, plots: PlotIn
       return { icon: "👻", text: `${n(e.cat)} starved and became a ghost`, tone: "death" };
     case "catch":
       return { icon: "🐭", text: `${n(e.cat)} caught a stray fish at night`, tone: "good" };
+    case "scraps":
+      return { icon: "🗑️", text: `${n(e.cat)} found a fish in ${e.other !== null ? `${n(e.other)}'s` : "the"} trash`, tone: "good" };
     case "rot":
-      return { icon: "🦴", text: `${e.qty} of ${n(e.cat)}'s fish rotted`, tone: "bad" };
+      return { icon: "🦴", text: `${e.qty} fish rotted${e.cat !== null ? ` in ${n(e.cat)}'s stash` : ""}`, tone: "bad" };
     case "refuel":
       return { icon: "⛽", text: `${n(e.cat)} moved ${near(e.price)} to its own account to pay for gas`, tone: "info" };
     case "claim":

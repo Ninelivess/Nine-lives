@@ -719,7 +719,45 @@ impl NineLives {
             }
         }
 
-        // 3. Eating, hunger, death, rot
+        // 3. Scraps: fish above the cap are thrown out. Half spoil; the rest land, one each, with
+        //    cats whose bowl is empty, in random order.
+        let mut scraps: u32 = 0;
+        let mut donor: Option<u32> = None;
+        for id in ids.iter() {
+            let mut cat = self.cats.get(id).cloned().unwrap();
+            if cat.alive && cat.fish > self.config.fish_cap {
+                scraps += cat.fish - self.config.fish_cap;
+                cat.fish = self.config.fish_cap;
+                donor.get_or_insert(*id);
+                self.cats.insert(*id, cat);
+            }
+        }
+        let spoiled = scraps.div_ceil(2);
+        let mut left = scraps - spoiled;
+        if left > 0 {
+            let mut needy: Vec<(u8, u32)> = ids
+                .iter()
+                .filter(|id| self.cats.get(*id).map(|c| c.alive && c.fish == 0).unwrap_or(false))
+                .map(|id| (env::sha256(&[seed.as_slice(), b"scraps", &id.to_le_bytes()].concat())[0], *id))
+                .collect();
+            needy.sort();
+            for (_, id) in needy {
+                if left == 0 {
+                    break;
+                }
+                let mut cat = self.cats.get(&id).cloned().unwrap();
+                cat.fish += 1;
+                left -= 1;
+                let name = cat.name.clone();
+                self.cats.insert(id, cat);
+                self.push_event("scraps", Some(id), donor, Some("fish".into()), 1, 0, None, format!("{} found a fish in the trash", name));
+            }
+        }
+        if spoiled + left > 0 {
+            self.push_event("rot", donor, None, Some("fish".into()), spoiled + left, 0, None, String::new());
+        }
+
+        // 4. Eating, hunger, death
         let mut ate = 0u32;
         let mut deaths: Vec<u32> = vec![];
         for id in ids {
@@ -739,23 +777,18 @@ impl NineLives {
                     self.push_event("hungry", Some(id), None, None, cat.hunger as u32, 0, None, format!("{} went to sleep hungry", cat.name));
                 }
             }
-            if cat.fish > self.config.fish_cap {
-                let rotten = cat.fish - self.config.fish_cap;
-                cat.fish = self.config.fish_cap;
-                self.push_event("rot", Some(id), None, Some("fish".into()), rotten, 0, None, String::new());
-            }
             self.cats.insert(id, cat);
         }
         for id in deaths {
             self.kill(id);
         }
 
-        // 4. Shop cools down
+        // 5. Shop cools down
         let base = yocto(self.config.fish_base_price);
         self.fish_price = (self.fish_price * 90 / 100).max(base);
         self.fish_sold_today = 0;
 
-        // 5. Expire old offers
+        // 6. Expire old offers
         let ttl = self.config.offer_ttl_days;
         let expired: Vec<u64> = self
             .offers

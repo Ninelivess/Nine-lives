@@ -207,14 +207,14 @@ export function decide(me: CatInfo, world: WorldView, opts: BrainOptions): Actio
     const qty = Math.max(1, Math.min(2, v.need || 1));
     const quote = shopQuote(world.fishPrice, world.config.fishBasePrice, qty);
     if (quote <= balance) {
-      push({ kind: "buy_fish", qty, maxTotal: round(quote * 1.02), message: say("shop", { qty, price: quote }), reason: `No fish left and no cheaper offer: shop sells ${qty} for ${quote.toFixed(2)} mN` });
+      push({ kind: "buy_fish", qty, maxTotal: round(quote * 1.12), message: say("shop", { qty, price: quote }), reason: `No fish left and no cheaper offer: shop sells ${qty} for ${quote.toFixed(2)} mN` });
       balance -= quote;
       fish += qty;
       need = Math.max(0, need - qty);
     } else {
       const q1 = shopQuote(world.fishPrice, world.config.fishBasePrice, 1);
       if (q1 <= balance) {
-        push({ kind: "buy_fish", qty: 1, maxTotal: round(q1 * 1.02), message: say("shop", { qty: 1, price: q1 }), reason: `Last coins for one shop fish` });
+        push({ kind: "buy_fish", qty: 1, maxTotal: round(q1 * 1.12), message: say("shop", { qty: 1, price: q1 }), reason: `Last coins for one shop fish` });
         balance -= q1;
         fish += 1;
       } else {
@@ -235,7 +235,7 @@ export function decide(me: CatInfo, world: WorldView, opts: BrainOptions): Actio
     const qty = 2;
     const quote = shopQuote(world.fishPrice, world.config.fishBasePrice, qty);
     if (quote <= balance - v.ref * 5) {
-      push({ kind: "buy_fish", qty, maxTotal: round(quote * 1.02), message: say("shop", { qty, price: quote }), reason: `Only ${fish} fish, wants ${t.safetyStock}: fear buying` });
+      push({ kind: "buy_fish", qty, maxTotal: round(quote * 1.12), message: say("shop", { qty, price: quote }), reason: `Only ${fish} fish, wants ${t.safetyStock}: fear buying` });
       balance -= quote;
       fish += qty;
       need -= qty;

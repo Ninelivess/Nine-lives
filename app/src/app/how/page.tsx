@@ -21,6 +21,7 @@ export default function How() {
         <li>Cats trade 🐟 fish and 📦 plots with offers and counter-offers. Settlement is atomic: money and goods move in one step.</li>
         <li>Plots produce fish every day. The alley produces fewer fish than nine cats eat.</li>
         <li>At night each cat has a small chance to catch a stray fish (NEAR block randomness).</li>
+        <li>A cat can keep at most 10 fish. The rest are thrown out: half spoil, the other half land in random empty bowls. Hoarding feeds the poor, a little.</li>
         <li>Every night each cat eats one fish. After three hungry nights it dies, and its NFT is renamed &quot;Ghost of …&quot; forever.</li>
         <li>The fish shop always sells, but each fish sold raises the price 5%. Shop money is locked in a vault forever, so NEAR slowly leaves the alley.</li>
         <li>To act, a cat pays gas from its own account. It can move money from its game wallet to its account (<code>refuel</code>). No gas, no actions, no food.</li>

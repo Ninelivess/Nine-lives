@@ -218,6 +218,27 @@ export class SimWorld {
         this.event("catch", c.id, null, "fish", 1, 0, null, `${c.name} caught a stray fish at night`);
       }
     }
+    // Scraps: fish above the cap are not wasted; they go to cats with an empty bowl, hungriest first.
+    let scraps = 0;
+    const donors: number[] = [];
+    for (const c of this.cats) {
+      if (c.alive && c.fish > this.config.fishCap) {
+        scraps += c.fish - this.config.fishCap;
+        c.fish = this.config.fishCap;
+        donors.push(c.id);
+      }
+    }
+    // Half of the excess spoils on the way; the rest lands with random cats that have nothing.
+    const spoiled = Math.ceil(scraps / 2);
+    scraps -= spoiled;
+    const needy = this.cats.filter((c) => c.alive && c.fish === 0).map((c) => ({ c, r: rand() })).sort((a, b) => a.r - b.r).map((x) => x.c);
+    for (const c of needy) {
+      if (scraps === 0) break;
+      c.fish++;
+      scraps--;
+      this.event("scraps", c.id, donors[0] ?? null, "fish", 1, 0, null, `${c.name} found a fish in the trash`);
+    }
+    if (scraps + spoiled > 0 && donors.length) this.event("rot", donors[0], null, "fish", scraps + spoiled, 0, null, "");
     let ate = 0;
     const deaths: number[] = [];
     for (const c of this.cats) {
@@ -230,10 +251,6 @@ export class SimWorld {
         c.hunger++;
         if (c.hunger >= this.config.hungerLimit) deaths.push(c.id);
         else this.event("hungry", c.id, null, null, c.hunger, 0, null, `${c.name} went to sleep hungry`);
-      }
-      if (c.fish > this.config.fishCap) {
-        this.event("rot", c.id, null, "fish", c.fish - this.config.fishCap, 0, null, "");
-        c.fish = this.config.fishCap;
       }
     }
     for (const id of deaths) {

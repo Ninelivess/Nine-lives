@@ -258,8 +258,8 @@ fn plots_produce_fish_and_fish_rot_above_cap() {
         ctx(bob(), 0, now);
         c.tick();
     }
-    // +2 produced, -1 eaten per day, capped at 10.
-    assert_eq!(fish(&c, 1), 10);
+    // +2 produced, capped at 10, -1 eaten per day: settles at 9.
+    assert_eq!(fish(&c, 1), 9);
     assert!(c.get_events(None, Some(200)).iter().any(|e| e.kind == "rot"));
 }
 
@@ -370,4 +370,26 @@ fn only_admin_can_change_config() {
     let cfg = c.get_state().config;
     ctx(alice(), 0, 2_000);
     c.set_config(cfg);
+}
+
+#[test]
+fn excess_fish_feed_an_empty_bowl() {
+    let mut c = setup(2);
+    let mut rich = c.cats.get(&1).unwrap().clone();
+    rich.fish = 20;
+    c.cats.insert(1, rich);
+    let mut poor = c.cats.get(&2).unwrap().clone();
+    poor.fish = 0;
+    poor.hunger = 2;
+    c.cats.insert(2, poor);
+    ctx(bob(), 0, 1_000 + DAY_MS);
+    c.tick();
+    // 10 fish over the cap: 5 spoil, 1 lands in cat 2's empty bowl, the rest rot. Cat 2 eats it and survives.
+    let poor = c.get_cat(2).unwrap().cat;
+    assert!(poor.alive);
+    assert_eq!(poor.hunger, 0);
+    assert_eq!(fish(&c, 1), 9);
+    let evs = c.get_events(None, Some(200));
+    assert!(evs.iter().any(|e| e.kind == "scraps" && e.cat == Some(2) && e.other == Some(1)));
+    assert!(evs.iter().any(|e| e.kind == "rot" && e.qty == 9));
 }
