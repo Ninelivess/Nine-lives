@@ -103,6 +103,7 @@ export function Hotbar() {
         else window.location.href = `/#${SLOTS[i].id}`;
       }
       if (e.key === "6") window.location.href = "/simulate";
+      if (e.key === "7") window.location.href = "/agents";
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -132,6 +133,11 @@ export function Hotbar() {
         <span className="key">6</span>
         <Icon name="ff" />
         <span className="tip pbox">Fast-forward</span>
+      </Link>
+      <Link href="/agents" className={`slot ${path === "/agents" ? "on" : ""}`} aria-label="Buy with your AI">
+        <span className="key">7</span>
+        <Icon name="bot" />
+        <span className="tip pbox">Buy with your AI</span>
       </Link>
     </nav>
   );

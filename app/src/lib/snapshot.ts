@@ -13,6 +13,8 @@ export interface Snapshot {
   dayLengthMs: number;
   world: WorldView;
   events: GameEvent[];
+  /** Cat NFTs for sale (price in milliNEAR). */
+  listings?: { catId: number; price: number; priceYocto: string; seller: string }[];
   /** Chain clock minus local clock, ms. */
   skew: number;
 }

@@ -50,6 +50,8 @@ enum StorageKey {
     CatByAccount,
     Offers,
     Events,
+    /// Added after launch. Lives outside the contract struct so the existing state stays readable.
+    Listings,
 }
 
 #[near(serializers = [borsh, json])]
@@ -186,6 +188,21 @@ pub struct GameEvent {
     pub price: U128,
     pub offer_id: Option<u64>,
     pub text: String,
+}
+
+/// A cat NFT for sale. Anyone, a person or an AI agent, can buy it with `buy_cat`.
+#[near(serializers = [json])]
+pub struct Listing {
+    pub token_id: TokenId,
+    pub cat_id: u32,
+    pub name: String,
+    pub alive: bool,
+    pub seller: AccountId,
+    pub price: U128,
+}
+
+fn listings() -> LookupMap<TokenId, U128> {
+    LookupMap::new(StorageKey::Listings)
 }
 
 #[near(serializers = [json])]
@@ -847,6 +864,73 @@ impl NineLives {
     }
 
     // ------------------------------------------------------------------
+    // Marketplace: buy and sell cat NFTs (built for people and for AI agents)
+    // ------------------------------------------------------------------
+
+    /// The NFT holder puts the cat up for sale at `price` (yoctoNEAR).
+    pub fn list_cat(&mut self, token_id: TokenId, price: U128) {
+        let owner = self.tokens.owner_by_id.get(&token_id).unwrap_or_else(|| env::panic_str("No such token"));
+        require!(env::predecessor_account_id() == owner, "Only the NFT holder can list it");
+        require!(price.0 >= NearToken::from_millinear(10).as_yoctonear(), "Minimum price is 0.01 NEAR");
+        let mut l = listings();
+        l.insert(token_id.clone(), price);
+        let id: u32 = token_id.parse().unwrap_or(0);
+        self.push_event("listed", Some(id), None, None, 0, price.0, None, owner.to_string());
+    }
+
+    /// The NFT holder takes the cat off the market.
+    pub fn delist_cat(&mut self, token_id: TokenId) {
+        let owner = self.tokens.owner_by_id.get(&token_id).unwrap_or_else(|| env::panic_str("No such token"));
+        require!(env::predecessor_account_id() == owner, "Only the NFT holder can delist it");
+        let mut l = listings();
+        require!(l.remove(&token_id).is_some(), "This cat is not for sale");
+        let id: u32 = token_id.parse().unwrap_or(0);
+        self.push_event("delisted", Some(id), None, None, 0, 0, None, owner.to_string());
+    }
+
+    /// Buy a listed cat. Attach at least the price; the NFT moves to the caller and the seller is
+    /// paid in the same transaction. Any extra deposit is refunded.
+    #[payable]
+    pub fn buy_cat(&mut self, token_id: TokenId) -> AccountId {
+        let mut l = listings();
+        let price = l.get(&token_id).copied().unwrap_or_else(|| env::panic_str("This cat is not for sale"));
+        let seller = self.tokens.owner_by_id.get(&token_id).unwrap_or_else(|| env::panic_str("No such token"));
+        let buyer = env::predecessor_account_id();
+        require!(buyer != seller, "You already own this cat");
+        let deposit = env::attached_deposit().as_yoctonear();
+        require!(deposit >= price.0, format!("Attach at least {} yoctoNEAR", price.0));
+        l.remove(&token_id);
+        drop(l);
+        self.tokens.internal_transfer(&seller, &buyer, &token_id, None, Some("bought in the alley".to_string()));
+        Promise::new(seller.clone()).transfer(NearToken::from_yoctonear(price.0)).detach();
+        if deposit > price.0 {
+            Promise::new(buyer.clone()).transfer(NearToken::from_yoctonear(deposit - price.0)).detach();
+        }
+        let id: u32 = token_id.parse().unwrap_or(0);
+        self.push_event("sale", Some(id), None, None, 0, price.0, None, format!("{}|{}", seller, buyer));
+        buyer
+    }
+
+    pub fn get_listings(&self) -> Vec<Listing> {
+        let l = listings();
+        (1..self.next_cat_id)
+            .filter_map(|id| {
+                let token_id = id.to_string();
+                let price = l.get(&token_id)?;
+                let cat = self.cats.get(&id)?;
+                Some(Listing {
+                    token_id: token_id.clone(),
+                    cat_id: id,
+                    name: cat.name.clone(),
+                    alive: cat.alive,
+                    seller: self.tokens.owner_by_id.get(&token_id)?,
+                    price: *price,
+                })
+            })
+            .collect()
+    }
+
+    // ------------------------------------------------------------------
     // Admin
     // ------------------------------------------------------------------
 
@@ -1086,6 +1170,8 @@ impl NonFungibleTokenCore for NineLives {
         approval_id: Option<u64>,
         memo: Option<String>,
     ) {
+        // A private transfer cancels any open sale.
+        listings().remove(&token_id);
         self.tokens.nft_transfer(receiver_id, token_id, approval_id, memo)
     }
 
@@ -1098,6 +1184,7 @@ impl NonFungibleTokenCore for NineLives {
         memo: Option<String>,
         msg: String,
     ) -> PromiseOrValue<bool> {
+        listings().remove(&token_id);
         self.tokens.nft_transfer_call(receiver_id, token_id, approval_id, memo, msg)
     }
 

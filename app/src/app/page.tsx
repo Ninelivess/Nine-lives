@@ -111,7 +111,7 @@ export default function Home() {
       <Pager
         pages={[
           { id: "alley", node: alley },
-          { id: "cats", node: <CatsScreen world={w} /> },
+          { id: "cats", node: <CatsScreen world={w} listings={snap?.listings ?? []} /> },
           { id: "gazette", node: <GazetteScreen world={w} events={snap?.events ?? []} /> },
           { id: "graveyard", node: <GraveyardScreen world={w} /> },
           { id: "how", node: <HowScreen world={world} /> },

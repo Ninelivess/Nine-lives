@@ -174,6 +174,18 @@ const ICONS: Record<string, string[]> = {
     ".kwwwwwwk.",
     "..kkkkkk..",
   ],
+  bot: [
+    "....kk....",
+    "....kg....",
+    ".kkkkkkkk.",
+    "kwwwwwwwwk",
+    "kwgkwwkgwk",
+    "kwwwwwwwwk",
+    "kwwkkkkwwk",
+    "kwwwwwwwwk",
+    ".kkkkkkkk.",
+    "..k....k..",
+  ],
   up: [
     "....k.....",
     "...kgk....",

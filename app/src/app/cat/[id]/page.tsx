@@ -7,7 +7,7 @@ import { tileColors } from "@/engine/pixel";
 import { PERSONALITIES } from "@/engine/personalities";
 import type { Traits } from "@/engine/types";
 import { Feed, Icon, PixelCat, explorer } from "@/components/AlleyView";
-import { CatActions } from "@/components/CatActions";
+import { CatActions, SaleBox } from "@/components/CatActions";
 import { near } from "@/lib/describe";
 import { useSnapshot } from "@/lib/snapshot";
 
@@ -65,6 +65,9 @@ export default function CatPage({ params }: { params: Promise<{ id: string }> })
               <div><dt>Its own NEAR account</dt><dd><a href={explorer(snap.network, cat.accountId)} target="_blank" rel="noreferrer" style={{ color: "#8a4b12" }}>{cat.accountId}</a></dd></div>
               <div><dt>Gas left on it</dt><dd className="mono">{cat.gasBalance !== undefined ? near(cat.gasBalance) : "—"}</dd></div>
             </dl>
+            <div className="pbox" style={{ padding: "14px 16px", marginTop: 20 }}>
+              <SaleBox cat={cat} sale={snap.listings?.find((l) => l.catId === cat.id)} />
+            </div>
           </div>
         </div>
 

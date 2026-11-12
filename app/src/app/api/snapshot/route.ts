@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { loadSnapshot, DEFAULT_CONTRACT, NETWORK } from "@/engine/rpc";
+import { loadSnapshot, view, DEFAULT_CONTRACT, NETWORK } from "@/engine/rpc";
+import { yoctoToMilli } from "@/engine/units";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,10 @@ let cache: { at: number; body: unknown } | null = null;
 let inflight: Promise<unknown> | null = null;
 
 async function refresh() {
-  const snap = await loadSnapshot({ withGas: true });
+  const [snap, rawListings] = await Promise.all([
+    loadSnapshot({ withGas: true }),
+    view<{ cat_id: number; price: string; seller: string }[]>("get_listings").catch(() => []),
+  ]);
   const body = {
     contractId: DEFAULT_CONTRACT,
     network: NETWORK,
@@ -18,6 +22,7 @@ async function refresh() {
     dayLengthMs: snap.state.config.day_length_ms,
     world: snap.world,
     events: snap.events,
+    listings: rawListings.map((l) => ({ catId: l.cat_id, price: yoctoToMilli(l.price), priceYocto: l.price, seller: l.seller })),
   };
   cache = { at: Date.now(), body };
   return body;

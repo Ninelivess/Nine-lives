@@ -402,3 +402,72 @@ fn media_base_moves_existing_nft_images() {
     let media = c.nft_token("2".into()).unwrap().metadata.unwrap().media.unwrap();
     assert_eq!(media, "https://alley.example/api/cat/2/image");
 }
+
+// ---------------------------------------------------------------- marketplace
+
+#[test]
+fn holder_lists_and_anyone_buys() {
+    let mut c = setup(2);
+    ctx(alice(), 0, 2_000);
+    c.list_cat("2".into(), U128(near(500)));
+    assert_eq!(c.get_listings().len(), 1);
+    assert_eq!(c.get_listings()[0].seller, alice());
+    // Bob (or Bob's AI agent) buys it, overpaying a little.
+    ctx(bob(), near(600), 3_000);
+    let new_owner = c.buy_cat("2".into());
+    assert_eq!(new_owner, bob());
+    assert_eq!(c.nft_token("2".into()).unwrap().owner_id, bob());
+    assert!(c.get_listings().is_empty());
+    assert!(c.get_events(None, Some(200)).iter().any(|e| e.kind == "sale" && e.cat == Some(2) && e.price.0 == near(500)));
+}
+
+#[test]
+#[should_panic(expected = "Only the NFT holder can list it")]
+fn only_holder_can_list() {
+    let mut c = setup(1);
+    ctx(bob(), 0, 2_000);
+    c.list_cat("1".into(), U128(near(500)));
+}
+
+#[test]
+#[should_panic(expected = "Attach at least")]
+fn buying_needs_the_full_price() {
+    let mut c = setup(1);
+    ctx(alice(), 0, 2_000);
+    c.list_cat("1".into(), U128(near(500)));
+    ctx(bob(), near(499), 3_000);
+    c.buy_cat("1".into());
+}
+
+#[test]
+#[should_panic(expected = "This cat is not for sale")]
+fn a_private_transfer_cancels_the_sale() {
+    let mut c = setup(1);
+    ctx(alice(), 0, 2_000);
+    c.list_cat("1".into(), U128(near(500)));
+    ctx(alice(), 1, 3_000);
+    c.nft_transfer(bob(), "1".into(), None, None);
+    ctx(admin(), near(500), 4_000);
+    c.buy_cat("1".into());
+}
+
+#[test]
+fn holder_can_delist() {
+    let mut c = setup(1);
+    ctx(alice(), 0, 2_000);
+    c.list_cat("1".into(), U128(near(500)));
+    c.delist_cat("1".into());
+    assert!(c.get_listings().is_empty());
+}
+
+#[test]
+fn a_ghost_can_be_sold_as_a_collectible() {
+    let mut c = setup(1);
+    c.kill(1);
+    ctx(alice(), 0, 2_000);
+    c.list_cat("1".into(), U128(near(20)));
+    assert!(!c.get_listings()[0].alive);
+    ctx(bob(), near(20), 3_000);
+    c.buy_cat("1".into());
+    assert_eq!(c.nft_token("1".into()).unwrap().owner_id, bob());
+}

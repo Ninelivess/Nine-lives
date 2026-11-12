@@ -59,11 +59,24 @@ export function describe(e: GameEvent, cats: Map<number, CatInfo>, plots: PlotIn
       return { icon: "🍽️", text: `${n(e.cat)} was fed ${near(e.price)} by a human`, tone: "good" };
     case "tick":
       return { icon: "🌙", text: e.text, tone: "night" };
+    case "listed":
+      return { icon: "", text: `${n(e.cat)} was put up for sale for ${near(e.price)}`, tone: "info" };
+    case "delisted":
+      return { icon: "", text: `${n(e.cat)} was taken off the market`, tone: "info" };
+    case "sale": {
+      const [seller, buyer] = e.text.split("|");
+      return { icon: "", text: `${n(e.cat)} was sold for ${near(e.price)}: ${short(seller)} → ${short(buyer)}`, tone: "trade" };
+    }
     case "config":
       return { icon: "⚙️", text: "The alley rules were updated", tone: "info" };
     default:
       return { icon: "·", text: `${e.kind}`, tone: "info" };
   }
+}
+
+function short(account: string | undefined): string {
+  if (!account) return "?";
+  return account.length > 24 ? `${account.slice(0, 10)}…${account.slice(-8)}` : account;
 }
 
 export function plotName(plots: PlotInfo[], id: number): string {

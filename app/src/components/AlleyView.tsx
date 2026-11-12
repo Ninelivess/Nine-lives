@@ -30,6 +30,7 @@ export function PixelCat({ c, size }: { c: Pick<CatInfo, "id" | "personality" | 
 const EVENT_ICON: Record<string, IconName> = {
   trade: "coin", offer: "paper", counter: "paper", cancel: "paper", say: "cat", shop: "fish", plot: "house", hungry: "heart",
   death: "ghost", catch: "fish", scraps: "fish", rot: "fish", tick: "moon", refuel: "key", claim: "coin", feed: "paw", adopt: "cat", config: "book",
+  listed: "coin", delisted: "paper", sale: "coin",
 };
 
 function statusOf(c: CatInfo, world: WorldView): "fine" | "worried" | "hungry" | "ghost" {
@@ -64,7 +65,10 @@ export function ScreenHead({ icon, kicker, title, sub, right }: { icon: IconName
 
 // ---------------------------------------------------------------- cats
 
-export function CatCard({ c, world, linked = true }: { c: CatInfo; world: WorldView; linked?: boolean }) {
+export type Listings = { catId: number; price: number; seller: string }[];
+
+export function CatCard({ c, world, linked = true, listings = [] }: { c: CatInfo; world: WorldView; linked?: boolean; listings?: Listings }) {
+  const sale = listings.find((l) => l.catId === c.id);
   const p = PERSONALITIES.find((x) => x.key === c.personality);
   const v = c.alive ? valuation(c, world) : null;
   const plots = world.plots.filter((x) => x.owner === c.id);
@@ -87,6 +91,7 @@ export function CatCard({ c, world, linked = true }: { c: CatInfo; world: WorldV
           <div className="bar-row" title="Wallet in NEAR"><Icon name="coin" /><PBar value={c.balance} max={richest} color="#e8a33a" /><span>{(c.balance / 1000).toFixed(3)}</span></div>
         </div>
         {c.lastWords && <div className="cat-quote">“{c.lastWords}”</div>}
+        {sale && <div className="chips"><span className="plot-chip sale-chip">for sale · {(sale.price / 1000).toFixed(3)} NEAR</span></div>}
       </div>
     </>
   );
@@ -97,16 +102,22 @@ export function CatCard({ c, world, linked = true }: { c: CatInfo; world: WorldV
   );
 }
 
-export function CatsScreen({ world, linked = true }: { world: WorldView; linked?: boolean }) {
+export function CatsScreen({ world, linked = true, listings = [] }: { world: WorldView; linked?: boolean; listings?: Listings }) {
   const alive = world.cats.filter((c) => c.alive);
   const ghosts = world.cats.filter((c) => !c.alive);
   return (
     <section className="screen" id="cats" data-screen="cats">
       <div className="container">
-        <ScreenHead icon="cat" kicker="Character select" title="The nine." sub="Each cat is an NFT with its own NEAR account and a personality from behavioral economics. Click one to see what it is thinking." />
+        <ScreenHead
+          icon="cat"
+          kicker="Character select"
+          title="The nine."
+          sub="Each cat is an NFT with its own NEAR account and a personality from behavioral economics. Click one to see what it is thinking, or adopt one."
+          right={<Link className="btn" href="/agents"><Icon name="bot" /> Buy with your AI</Link>}
+        />
         <div className="roster">
           {[...alive, ...ghosts].map((c, i) => (
-            <div key={c.id} className={`reveal d${(i % 3) + 1}`}><CatCard c={c} world={world} linked={linked} /></div>
+            <div key={c.id} className={`reveal d${(i % 3) + 1}`}><CatCard c={c} world={world} linked={linked} listings={listings} /></div>
           ))}
         </div>
       </div>
