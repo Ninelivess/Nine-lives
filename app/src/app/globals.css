@@ -84,36 +84,24 @@ code { font-family: var(--mono); font-size: .85em; color: var(--ink); background
 .btn-row { display: flex; flex-wrap: wrap; gap: 16px; margin: 14px 0 18px; }
 .btn-row button:disabled, .controls button:disabled { opacity: .45; transform: none; }
 
-/* ---------- intro: the paw tears the paper ---------- */
+/* ---------- intro: a paw scratches the paper open (driven frame by frame in Intro.tsx) ---------- */
 .intro { position: fixed; inset: 0; z-index: 500; overflow: hidden; }
 .intro-piece { position: absolute; inset: 0; will-change: transform; }
 .intro-paper { position: absolute; inset: -2px; background: var(--paper);
   background-image: radial-gradient(#e9dcc0 1px, transparent 1.5px), radial-gradient(#efe3c9 1px, transparent 1.5px);
   background-size: 14px 14px, 22px 22px; background-position: 0 0, 7px 11px; }
-.intro-tear .intro-piece-0 { animation: piece0 1.1s cubic-bezier(.5,0,.9,.4) forwards; }
-.intro-tear .intro-piece-1 { animation: piece1 1.1s cubic-bezier(.5,0,.9,.4) .05s forwards; }
-.intro-tear .intro-piece-2 { animation: piece2 1.1s cubic-bezier(.5,0,.9,.4) .1s forwards; }
-.intro-tear .intro-piece-3 { animation: piece3 1.1s cubic-bezier(.5,0,.9,.4) .02s forwards; }
-@keyframes piece0 { to { transform: translate(-28vw, 40vh) rotate(-9deg); opacity: .0; } }
-@keyframes piece1 { to { transform: translate(-6vw, 110vh) rotate(14deg); opacity: .2; } }
-@keyframes piece2 { to { transform: translate(4vw, 115vh) rotate(-12deg); opacity: .2; } }
-@keyframes piece3 { to { transform: translate(30vw, 42vh) rotate(8deg); opacity: 0; } }
 .intro-mark { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--ink); pointer-events: none; }
 .intro-logo { font-family: var(--pixel); font-weight: 700; font-size: clamp(36px, 6vw, 72px); letter-spacing: .04em; }
 .intro-sub { font-family: var(--label); font-size: 11px; letter-spacing: .1em; color: #8c7a63; animation: blink 1.2s steps(2) infinite; }
-.intro-tear .intro-mark { opacity: 0; transition: opacity .15s; }
 .intro-claws { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.intro-claws .claw, .intro-claws .claw-shadow { fill: none; vector-effect: non-scaling-stroke; stroke-linecap: square; stroke-dasharray: 400; stroke-dashoffset: 400; animation: slash .22s steps(6) forwards; }
+.intro-claws path { fill: none; stroke-linecap: square; stroke-linejoin: miter; stroke-dasharray: 100 200; stroke-dashoffset: 100; }
 .intro-claws .claw { stroke: var(--ink); stroke-width: 11px; }
-.intro-claws .claw-shadow { stroke: #c9b48f; stroke-width: 15px; }
-.intro-tear .intro-claws { opacity: 0; transition: opacity .1s; }
-@keyframes slash { to { stroke-dashoffset: 0; } }
-.intro-paw { position: absolute; width: clamp(160px, 26vw, 340px); height: clamp(160px, 26vw, 340px); left: 50%; top: 50%; margin: calc(clamp(160px, 26vw, 340px) / -2) 0 0 calc(clamp(160px, 26vw, 340px) / -2);
-  image-rendering: pixelated; filter: drop-shadow(10px 14px 0 rgba(42,29,51,.25)); transform: translate(70vw, -70vh) rotate(-140deg); animation: swipe .9s cubic-bezier(.6,0,.3,1) .25s forwards; }
+.intro-claws .claw-shadow { stroke: #c9b48f; stroke-width: 17px; }
+.intro-claws .crack { stroke: var(--ink); stroke-width: 4px; }
+.intro-paw { position: absolute; z-index: 2; width: clamp(170px, 24vw, 330px); height: clamp(170px, 24vw, 330px); left: 50%; top: 50%; margin: calc(clamp(170px, 24vw, 330px) / -2) 0 0 calc(clamp(170px, 24vw, 330px) / -2);
+  image-rendering: pixelated; filter: drop-shadow(10px 14px 0 rgba(42, 29, 51, .25)); transform: translate(64vw, 64vh) rotate(-45deg); will-change: transform; }
 .intro-paw svg { width: 100%; height: 100%; display: block; }
-@keyframes swipe { 0% { transform: translate(70vw, -70vh) rotate(-140deg); } 30% { transform: translate(28vw, -30vh) rotate(-140deg); } 62% { transform: translate(-30vw, 34vh) rotate(-140deg); } 100% { transform: translate(-80vw, 90vh) rotate(-140deg); } }
-.intro-skip { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); font-family: var(--label); font-size: 10px; color: #8c7a63; letter-spacing: .1em; }
-.intro-tear .intro-skip { opacity: 0; }
+.intro-skip { position: absolute; bottom: 22px; left: 22px; font-family: var(--label); font-size: 10px; color: #8c7a63; letter-spacing: .1em; }
 
 /* ---------- top HUD ---------- */
 .hud { position: fixed; top: 0; left: 0; right: 0; z-index: 60; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 28px; pointer-events: none; }
