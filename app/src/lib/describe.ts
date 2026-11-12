@@ -1,6 +1,8 @@
 import type { CatInfo, GameEvent, PlotInfo } from "@/engine/types";
 import { PERSONALITIES } from "@/engine/personalities";
 
+export const HOMES = ["Cardboard Box", "Laundry Basket", "Trash Can", "Wooden Crate", "Flowerpot", "Paper Bag", "Fish Crate", "Treasure Chest", "Cat Bed"];
+
 export function near(mN: number, digits = 3): string {
   return `${(mN / 1000).toFixed(digits)} NEAR`;
 }
@@ -65,8 +67,24 @@ export function describe(e: GameEvent, cats: Map<number, CatInfo>, plots: PlotIn
       return { icon: "", text: `${n(e.cat)} was taken off the market`, tone: "info" };
     case "sale": {
       const [seller, buyer] = e.text.split("|");
+      if (seller?.split(".")[0] === "ninelives" && (cats.get(e.cat ?? -1)?.generation ?? 1) > 1) return { icon: "", text: `${n(e.cat)} was adopted from the nursery by ${short(buyer)} for ${near(e.price)}`, tone: "good" };
       return { icon: "", text: `${n(e.cat)} was sold for ${near(e.price)}: ${short(seller)} → ${short(buyer)}`, tone: "trade" };
     }
+    case "born": {
+      const kid = e.cat !== null ? cats.get(e.cat) : undefined;
+      return {
+        icon: "",
+        text: `${n(e.cat)} is born in the ${HOMES[e.qty] ?? "alley"}, child of ${n(e.other)}${kid ? ` (life ${kid.life}/9, generation ${kid.generation})` : ""}. Up for adoption.`,
+        quote: e.text ? `mutations: ${e.text}` : undefined,
+        tone: "good",
+      };
+    }
+    case "fan":
+      return { icon: "", text: `${short(e.text)} took a seat in the ${HOMES[e.qty] ?? "home"} fan club`, tone: "good" };
+    case "fan_claim":
+      return { icon: "", text: `A fan of the ${HOMES[e.qty] ?? "home"} collected ${near(e.price)}`, tone: "info" };
+    case "nursery":
+      return { icon: "", text: `${short(e.text)} saved ${near(e.price)} for the ${HOMES[e.qty] ?? "home"}'s next kitten`, tone: "good" };
     case "config":
       return { icon: "⚙️", text: "The alley rules were updated", tone: "info" };
     default:

@@ -6,7 +6,7 @@
 
 import { NextResponse } from "next/server";
 import { PERSONALITIES } from "@/engine/personalities";
-import { DEFAULT_CONTRACT, NETWORK, loadSnapshot, view } from "@/engine/rpc";
+import { DEFAULT_CONTRACT, NETWORK, loadSnapshot, toHome, view, type RawHome } from "@/engine/rpc";
 import { milliToYocto, yoctoToMilli } from "@/engine/units";
 
 export const dynamic = "force-dynamic";
@@ -23,11 +23,16 @@ const CORS = {
 interface RawListing { token_id: string; cat_id: number; name: string; alive: boolean; seller: string; price: string }
 
 const near = (mN: number) => `${(mN / 1000).toFixed(3)} NEAR`;
-const catId = { type: "integer", minimum: 1, maximum: 9, description: "Cat id, 1-9 (also its NFT token id)." };
+const catId = { type: "integer", minimum: 1, description: "Cat id (also its NFT token id). The nine founders are 1-9; kittens born later get higher ids." };
+const homeArg = { type: "integer", minimum: 0, maximum: 8, description: "Home 0-8: Cardboard Box, Laundry Basket, Trash Can, Wooden Crate, Flowerpot, Paper Bag, Fish Crate, Treasure Chest, Cat Bed." };
+
+async function homes() {
+  return (await view<RawHome[]>("get_homes")).map(toHome);
+}
 
 const TOOLS = [
   { name: "alley_status", description: "Current state of the Nine Lives alley on NEAR: game day, cats alive and dead, fish price, time until night.", inputSchema: { type: "object", properties: {} }, annotations: { readOnlyHint: true } },
-  { name: "list_cats", description: "All nine cats: name, personality, alive or ghost, wallet, fish, hunger, NFT holder and sale price if listed.", inputSchema: { type: "object", properties: {} }, annotations: { readOnlyHint: true } },
+  { name: "list_cats", description: "Every cat that ever lived in the alley (founders and kittens): name, personality, home, life and generation, alive or ghost, wallet, fish, hunger, NFT holder and sale price if listed.", inputSchema: { type: "object", properties: {} }, annotations: { readOnlyHint: true } },
   { name: "get_cat", description: "Everything about one cat: personality numbers, what it last said, recent life events, NFT holder, sale price.", inputSchema: { type: "object", properties: { cat_id: catId }, required: ["cat_id"] }, annotations: { readOnlyHint: true } },
   { name: "list_cats_for_sale", description: "Cat NFTs currently for sale, cheapest first, with seller and price in NEAR.", inputSchema: { type: "object", properties: {} }, annotations: { readOnlyHint: true } },
   { name: "how_it_works", description: "The rules of the alley and how buying, selling, feeding and profit claims work.", inputSchema: { type: "object", properties: {} }, annotations: { readOnlyHint: true } },
@@ -45,6 +50,23 @@ const TOOLS = [
     name: "delist_cat",
     description: "Prepare taking a cat NFT off the market. Only the holder can sign it.",
     inputSchema: { type: "object", properties: { cat_id: catId }, required: ["cat_id"] },
+  },
+  {
+    name: "list_homes",
+    description: "The nine homes with their nine lives each: who lives there now, lives used, fan-club seats taken (350 per home, 3,150 in all) and NEAR saved in the home's nursery for the next kitten.",
+    inputSchema: { type: "object", properties: {} },
+    annotations: { readOnlyHint: true },
+  },
+  {
+    name: "join_fan_club",
+    description: "Prepare taking a seat in a home's fan club for 0.01 NEAR (one seat per wallet per home). Half feeds the cat living there, half saves for its next kitten. Fans earn 30% of profit claims and half of kitten adoptions from that home. Give a home or a cat id.",
+    inputSchema: { type: "object", properties: { home: homeArg, cat_id: catId } },
+  },
+  {
+    name: "talk_to_cat",
+    description: "Send a message to a cat and get its in-character reply, written by NEAR AI Cloud from the cat's live on-chain state.",
+    inputSchema: { type: "object", properties: { cat_id: catId, message: { type: "string", maxLength: 400 } }, required: ["cat_id", "message"] },
+    annotations: { readOnlyHint: true },
   },
   {
     name: "feed_cat",
@@ -95,6 +117,10 @@ async function callTool(name: string, args: Record<string, unknown>) {
           cat_id: c.id,
           name: c.name,
           personality: PERSONALITIES.find((p) => p.key === c.personality)?.title,
+          home: c.home,
+          life: `${c.life}/9`,
+          generation: c.generation,
+          parent_cat_id: c.parent,
           status: c.alive ? (c.hunger > 0 ? `hungry ${c.hunger}/3` : "alive") : `ghost since day ${c.diedDay}`,
           wallet: near(c.balance),
           fish: c.fish,
@@ -116,6 +142,10 @@ async function callTool(name: string, args: Record<string, unknown>) {
         tagline: p?.tagline,
         based_on: p?.basis,
         traits: c.traits,
+        home: c.home,
+        life: `${c.life}/9`,
+        generation: c.generation,
+        parent_cat_id: c.parent,
         status: c.alive ? (c.hunger > 0 ? `hungry ${c.hunger}/3 nights` : "alive") : `ghost since day ${c.diedDay}`,
         own_near_account: c.accountId,
         wallet: near(c.balance),
@@ -139,6 +169,8 @@ async function callTool(name: string, args: Record<string, unknown>) {
     case "how_it_works":
       return {
         summary: "Nine AI cats live in one alley on NEAR. Each cat is an NFT and its own NEAR account with a key that can only play the game. They trade fish and plots with their own money. Every night each cat eats one fish; three hungry nights and it dies, and its NFT becomes a ghost forever.",
+        nine_lives: "Each of the nine homes has nine lives. The night after a cat dies, a kitten is born in its home, paid by the home's nursery and the fish shop's vault. The kitten's parent is the richest living cat and its personality numbers mutate a little, so winning strategies spread. Newborn kittens are put up for adoption at 0.1 NEAR.",
+        fan_clubs: "Each home has a fan club of 350 seats (3,150 in all), 0.01 NEAR each, one per wallet. Half the seat price feeds the cat, half saves for the next kitten. Fans earn 30% of profit claims and half of kitten adoption fees from that home.",
         owning_a_cat: "The NFT holder can claim the cat's profit (wallet above its stake). Taking too much can starve it. When the NFT is sold, the right to profits moves with it.",
         buying_and_selling: "Holders list cats with sell_cat. Anyone can buy a listed cat with buy_cat: the NFT and the payment move in one transaction. Ghost cats can be sold as collectibles.",
         safety: "These tools never sign anything. Write actions return a link where the human approves in their own wallet, and the raw function call for agents that sign with their own key.",
@@ -174,6 +206,48 @@ async function callTool(name: string, args: Record<string, unknown>) {
     }
     case "delist_cat":
       return { ok: true, approve_in_wallet: `${SITE}/sign?action=delist&cat=${id}`, raw_function_call: rawCall("delist_cat", { token_id: String(id) }, "0"), note: "Only the current NFT holder can sign this." };
+    case "list_homes": {
+      const [hs, s] = await Promise.all([homes(), loadSnapshot()]);
+      const cats = new Map(s.world.cats.map((c) => [c.id, c]));
+      return hs.map((h) => {
+        const c = cats.get(h.resident);
+        return {
+          home: h.home,
+          name: h.name,
+          living_here: c ? (c.alive ? `${c.name} (#${c.id})` : `ghost of ${c.name} (#${c.id}), waiting for a kitten`) : "nobody",
+          lives: `${h.livesUsed}/9 used`,
+          cats_that_lived_here: h.cats.map((id) => cats.get(id)?.name ?? `#${id}`),
+          fan_club: `${h.fans}/${h.seats} seats`,
+          nursery: near(h.nursery),
+          join_link: c ? `${SITE}/sign?action=join&cat=${c.id}` : null,
+        };
+      });
+    }
+    case "join_fan_club": {
+      const hs = await homes();
+      let h = args.home !== undefined ? hs.find((x) => x.home === Number(args.home)) : undefined;
+      if (!h && args.cat_id !== undefined) {
+        const c = await view<{ home?: number } | null>("get_cat", { cat_id: id });
+        h = hs.find((x) => x.home === (c?.home ?? -1));
+      }
+      if (!h) throw new Error("Give a home (0-8) or a cat_id");
+      if (h.fans >= h.seats) return { ok: false, reason: `The ${h.name} fan club is full.` };
+      return {
+        ok: true,
+        home: h.name,
+        seats: `${h.fans}/${h.seats} taken`,
+        price: "0.01 NEAR",
+        approve_in_wallet: `${SITE}/sign?action=join&cat=${h.resident}`,
+        raw_function_call: rawCall("join_fan_club", { home: h.home }, milliToYocto(10)),
+        note: "One seat per wallet per home. Nothing has been paid yet.",
+      };
+    }
+    case "talk_to_cat": {
+      const message = String(args.message ?? "").slice(0, 400);
+      const r = await fetch(`${SITE}/api/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ catId: id, messages: [{ role: "user", content: message }] }) });
+      const j = await r.json();
+      return { cat_id: id, reply: j.reply ?? j.error, written_by: j.mode === "near-ai" ? `NEAR AI Cloud (${j.model})` : "scripted fallback" };
+    }
     case "feed_cat": {
       const amount = Number(args.amount_near);
       if (!(amount >= 0.001)) throw new Error("amount_near must be at least 0.001");

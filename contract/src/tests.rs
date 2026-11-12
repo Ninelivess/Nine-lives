@@ -471,3 +471,226 @@ fn a_ghost_can_be_sold_as_a_collectible() {
     c.buy_cat("1".into());
     assert_eq!(c.nft_token("1".into()).unwrap().owner_id, bob());
 }
+
+// ---------------------------------------------------------------- fan clubs
+
+fn carol() -> AccountId {
+    "carol.testnet".parse().unwrap()
+}
+
+#[test]
+fn fans_take_seats_and_half_feeds_the_cat() {
+    let mut c = setup(2);
+    let before = bal(&c, 1);
+    ctx(bob(), near(10), 2_000);
+    assert_eq!(c.join_fan_club(0), 1);
+    let homes = c.get_homes();
+    assert_eq!(homes[0].fans, 1);
+    assert_eq!(homes[0].resident, 1);
+    let to_cat = bal(&c, 1) - before;
+    let saved = homes[0].nursery.0;
+    // Storage is paid first, the rest is split between the cat and the nursery.
+    assert!(to_cat > near(3) && to_cat <= near(5), "to cat {}", to_cat);
+    assert!(saved >= to_cat && saved - to_cat <= 1);
+    assert_eq!(c.get_cat(1).unwrap().cat.stake.0, bal(&c, 1));
+    assert_eq!(c.get_fans(0, None, None), vec![bob()]);
+    assert_eq!(c.get_state().fans, 1);
+    assert_eq!(c.get_state().fan_seats, 3150);
+}
+
+#[test]
+#[should_panic(expected = "You already have a seat in this fan club")]
+fn one_seat_per_wallet_per_home() {
+    let mut c = setup(1);
+    ctx(bob(), near(10), 2_000);
+    c.join_fan_club(0);
+    ctx(bob(), near(10), 3_000);
+    c.join_fan_club(0);
+}
+
+#[test]
+#[should_panic(expected = "Attach 0.01 NEAR for a seat")]
+fn a_seat_costs_a_hundredth_of_a_near() {
+    let mut c = setup(1);
+    ctx(bob(), near(5), 2_000);
+    c.join_fan_club(0);
+}
+
+#[test]
+#[should_panic(expected = "This fan club is full")]
+fn fan_club_has_350_seats() {
+    let mut c = setup(1);
+    for i in 0..SEATS_PER_HOME {
+        let fan: AccountId = format!("fan{}.testnet", i).parse().unwrap();
+        ctx(fan, near(10), 2_000);
+        c.join_fan_club(3);
+    }
+    assert_eq!(c.get_homes()[3].fans, SEATS_PER_HOME);
+    ctx(bob(), near(10), 3_000);
+    c.join_fan_club(3);
+}
+
+#[test]
+fn fans_earn_a_cut_of_profit_claims() {
+    let mut c = setup(2);
+    ctx(bob(), near(10), 1_500);
+    c.join_fan_club(0);
+    ctx(carol(), near(10), 1_600);
+    c.join_fan_club(0);
+    // Cat 1 makes 50 mN of profit.
+    ctx(cat_acc(1), 0, 2_000);
+    let o = c.make_offer(Side::Sell, ItemKind::Fish, Some(2), None, U128(near(50)), None, None, None);
+    ctx(cat_acc(2), 0, 3_000);
+    c.accept_offer(o, None);
+    ctx(alice(), 0, 4_000);
+    let got = c.claim_profit("1".into());
+    assert_eq!(got.0, near(35));
+    let seats = c.get_fan_seats(bob());
+    assert_eq!(seats.len(), 1);
+    assert_eq!(seats[0].pending.0, near(15) / 2);
+    ctx(bob(), 0, 5_000);
+    assert_eq!(c.claim_fan_rewards(0).0, near(15) / 2);
+    assert_eq!(c.get_fan_seats(bob())[0].pending.0, 0);
+    // A fan who joins later does not get earlier rewards.
+    ctx(admin(), near(10), 6_000);
+    c.join_fan_club(0);
+    assert_eq!(c.get_fan_seats(admin())[0].pending.0, 0);
+}
+
+// ---------------------------------------------------------------- nine lives
+
+fn starve(c: &mut NineLives, mut now: u64, days: u32) -> u64 {
+    for _ in 0..days {
+        now += DAY_MS;
+        ctx(bob(), 0, now);
+        c.tick();
+    }
+    now
+}
+
+fn register_keys(c: &mut NineLives, from: u32, to: u32) {
+    ctx(admin(), 0, 1_500);
+    c.register_brain_keys((from..=to).map(|i| (i, key())).collect());
+}
+
+#[test]
+fn a_kitten_is_born_in_a_dark_home() {
+    let mut c = setup(2);
+    register_keys(&mut c, 3, 20);
+    ctx(admin(), 0, 1_600);
+    c.treasury = near(1000);
+    // Cat 1 owns a plot and stays alive; cat 2 starves on day 6.
+    ctx(cat_acc(1), 0, 2_000);
+    c.buy_plot(0, None);
+    let mut now = starve(&mut c, 1_000, 6);
+    assert!(!c.get_cat(2).unwrap().cat.alive);
+    assert!(c.get_cat(3).is_none(), "no birth on the night of the death");
+    now = starve(&mut c, now, 1);
+    let kitten = c.get_cat(3).expect("a kitten is born the next night");
+    assert!(kitten.cat.alive);
+    assert_eq!(kitten.home, 1);
+    assert_eq!(kitten.life, 2);
+    assert_eq!(kitten.generation, 2);
+    assert_eq!(kitten.parent, Some(1), "the parent is the wealthiest living cat");
+    assert_eq!(kitten.cat.account_id, cat_acc(3));
+    assert_eq!(kitten.cat.personality, "shark");
+    assert!(kitten.cat.stake.0 >= near(100), "stake {}", kitten.cat.stake.0);
+    // The kitten NFT belongs to the nursery and is up for adoption.
+    assert_eq!(c.nft_token("3".into()).unwrap().owner_id, contract_id());
+    let l = c.get_listings();
+    assert!(l.iter().any(|x| x.cat_id == 3 && x.price.0 == near(100)));
+    let home = &c.get_homes()[1];
+    assert_eq!(home.resident, 3);
+    assert_eq!(home.lives_used, 2);
+    assert_eq!(home.lives_left, 7);
+    assert_eq!(home.cats, vec![2, 3]);
+    assert!(c.get_events(None, Some(200)).iter().any(|e| e.kind == "born" && e.cat == Some(3) && e.other == Some(1)));
+    assert!(c.treasury < near(1000));
+    // Only one kitten per night, and the home is now taken.
+    starve(&mut c, now, 1);
+    assert!(c.get_cat(4).is_none());
+}
+
+#[test]
+fn no_birth_without_a_brain_key_or_money() {
+    let mut c = setup(1);
+    let now = starve(&mut c, 1_000, 8);
+    assert!(c.get_cat(2).is_none(), "no key registered");
+    register_keys(&mut c, 2, 5);
+    c.treasury = 0;
+    let now = starve(&mut c, now, 2);
+    assert!(c.get_cat(2).is_none(), "no money");
+    // A donation to the nursery pays for the kitten.
+    ctx(carol(), near(300), now + 1);
+    c.donate_nursery(0);
+    starve(&mut c, now, 1);
+    let k = c.get_cat(2).expect("born with nursery money");
+    assert!(k.cat.stake.0 > near(150), "the whole nursery goes to the kitten");
+    assert_eq!(k.parent, Some(1), "with every cat dead, the home's last cat is the parent");
+    assert_eq!(c.get_homes()[0].nursery.0, 0);
+}
+
+#[test]
+fn a_home_has_nine_lives() {
+    let mut c = setup(1);
+    register_keys(&mut c, 2, 30);
+    c.treasury = near(10_000);
+    let mut now = 1_000;
+    for _ in 0..100 {
+        now = starve(&mut c, now, 1);
+    }
+    let h = &c.get_homes()[0];
+    assert_eq!(h.lives_used, 9);
+    assert_eq!(h.lives_left, 0);
+    assert_eq!(h.cats.len(), 9);
+    // The ninth cat starves too and nobody is born after it.
+    for _ in 0..20 {
+        now = starve(&mut c, now, 1);
+    }
+    assert!(!c.get_cat(h.resident).unwrap().cat.alive);
+    assert_eq!(c.get_cats().len(), 9);
+    assert_eq!(c.get_state().lives_used, 9 + 8);
+}
+
+#[test]
+fn adopting_a_kitten_pays_its_home() {
+    let mut c = setup(2);
+    register_keys(&mut c, 3, 5);
+    c.treasury = near(1000);
+    ctx(bob(), near(10), 1_700);
+    c.join_fan_club(1);
+    ctx(cat_acc(1), 0, 2_000);
+    c.buy_plot(0, None);
+    starve(&mut c, 1_000, 7);
+    assert!(c.get_cat(3).is_some());
+    let nursery_before = c.get_homes()[1].nursery.0;
+    ctx(carol(), near(100), 900_000);
+    c.buy_cat("3".into());
+    assert_eq!(c.nft_token("3".into()).unwrap().owner_id, carol());
+    assert_eq!(c.get_homes()[1].nursery.0 - nursery_before, near(50));
+    assert_eq!(c.get_fan_seats(bob())[0].pending.0, near(50));
+}
+
+#[test]
+fn mutations_stay_in_range() {
+    let parent = r#"{"risk":0.95,"lossAversion":0.9,"greed":0,"bluff":0.2,"patience":0.2,"generosity":0.2,"herding":0.6,"safetyStock":1,"endowment":1,"activity":1}"#;
+    for i in 0..200u32 {
+        let rnd = env::sha256(&i.to_le_bytes());
+        let (t, _) = mutate_traits(parent, &rnd);
+        let v: near_sdk::serde_json::Value = near_sdk::serde_json::from_str(&t).unwrap();
+        for k in ["risk", "greed", "bluff", "patience", "generosity", "herding"] {
+            let x = v[k].as_f64().unwrap();
+            assert!((0.0..=1.0).contains(&x), "{} {}", k, x);
+        }
+        let la = v["lossAversion"].as_f64().unwrap();
+        assert!((0.5..=3.5).contains(&la));
+        let a = v["activity"].as_f64().unwrap();
+        assert!((0.2..=1.0).contains(&a));
+        let s = v["safetyStock"].as_f64().unwrap();
+        assert!((0.0..=8.0).contains(&s) && s.fract() == 0.0);
+    }
+    // Not every kitten is a clone.
+    let (a, _) = mutate_traits(parent, &env::sha256(b"x"));
+    assert_ne!(a, parent);
+    assert_eq!(mutate_traits("not json", &[1, 2, 3]).0, "not json");
+}

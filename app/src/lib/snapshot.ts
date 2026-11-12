@@ -2,7 +2,7 @@
 
 // One shared poller for the live chain snapshot, used by the HUD and every page.
 import { useSyncExternalStore } from "react";
-import type { GameEvent, WorldView } from "@/engine/types";
+import type { GameEvent, HomeInfo, WorldView } from "@/engine/types";
 
 export interface Snapshot {
   contractId: string;
@@ -15,6 +15,11 @@ export interface Snapshot {
   events: GameEvent[];
   /** Cat NFTs for sale (price in milliNEAR). */
   listings?: { catId: number; price: number; priceYocto: string; seller: string }[];
+  /** The nine homes with their lives and fan clubs. */
+  homes?: HomeInfo[] | null;
+  fans?: number;
+  fanSeats?: number;
+  livesUsed?: number;
   /** Chain clock minus local clock, ms. */
   skew: number;
 }

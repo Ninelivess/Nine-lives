@@ -1,7 +1,7 @@
 // Read-only access to the contract over plain JSON-RPC. Works in the browser and in Node,
 // needs no keys and no NEAR library.
 
-import type { CatInfo, GameConfig, GameEvent, OfferInfo, PlotInfo, Traits, WorldView } from "./types";
+import type { CatInfo, GameConfig, GameEvent, HomeInfo, OfferInfo, PlotInfo, Traits, WorldView } from "./types";
 import { yoctoToMilli } from "./units";
 
 export const DEFAULT_RPC = process.env.NEXT_PUBLIC_NEAR_RPC || "https://test.rpc.fastnear.com";
@@ -59,11 +59,17 @@ export interface RawState {
   day: number; last_tick_ms: number; next_tick_ms: number; now_ms: number; fish_price: string; fish_sold_today: number;
   treasury: string; cats: number; alive: number; open_offers: number; event_count: number;
   plots: { id: number; name: string; fish_per_day: number; owner: number | null }[]; config: RawConfig; admin: string;
+  fans?: number; fan_seats?: number; lives_used?: number;
+}
+export interface RawHome {
+  home: number; name: string; resident: number; resident_alive: boolean; lives_used: number; lives_left: number;
+  cats: number[]; fans: number; seats: number; seat_price: string; nursery: string; reward_per_seat: string;
 }
 interface RawCat {
   id: number; name: string; account_id: string; personality: string; traits: string; balance: string; stake: string;
   fish: number; hunger: number; alive: boolean; account_ready: boolean; born_day: number; died_day: number | null;
   trades: number; claimed: string; last_words: string; owner_id: string | null; plots: number[];
+  home?: number; generation?: number; parent?: number | null; life?: number;
 }
 interface RawOffer {
   id: number; maker: number; side: "sell" | "buy"; item: "fish" | "plot"; qty: number; plot_id: number | null;
@@ -97,7 +103,30 @@ export function toCat(c: RawCat): CatInfo {
     balance: yoctoToMilli(c.balance), stake: yoctoToMilli(c.stake), fish: c.fish, hunger: c.hunger, alive: c.alive,
     accountReady: c.account_ready, bornDay: c.born_day, diedDay: c.died_day, trades: c.trades, claimed: yoctoToMilli(c.claimed),
     lastWords: c.last_words, ownerId: c.owner_id, plots: c.plots,
+    home: c.home ?? Math.min(8, c.id - 1), generation: c.generation ?? 1, parent: c.parent ?? null, life: c.life ?? 1,
   };
+}
+
+export function toHome(h: RawHome): HomeInfo {
+  return {
+    home: h.home, name: h.name, resident: h.resident, residentAlive: h.resident_alive, livesUsed: h.lives_used,
+    livesLeft: h.lives_left, cats: h.cats, fans: h.fans, seats: h.seats, seatPrice: yoctoToMilli(h.seat_price),
+    nursery: yoctoToMilli(h.nursery), rewardPerSeat: yoctoToMilli(h.reward_per_seat),
+  };
+}
+
+const HOME_NAMES = ["Cardboard Box", "Laundry Basket", "Trash Can", "Wooden Crate", "Flowerpot", "Paper Bag", "Fish Crate", "Treasure Chest", "Cat Bed"];
+
+/** Homes worked out from the cats alone (for the offline simulator, or before the chain answers). */
+export function homesFromCats(cats: CatInfo[]): HomeInfo[] {
+  return HOME_NAMES.map((name, home) => {
+    const mine = cats.filter((c) => c.home === home).sort((a, b) => a.id - b.id);
+    const last = mine[mine.length - 1];
+    return {
+      home, name, resident: last?.id ?? 0, residentAlive: !!last?.alive, livesUsed: Math.max(1, mine.length),
+      livesLeft: 9 - Math.max(1, mine.length), cats: mine.map((c) => c.id), fans: 0, seats: 350, seatPrice: 10, nursery: 0, rewardPerSeat: 0,
+    };
+  });
 }
 
 export function toOffer(o: RawOffer): OfferInfo {

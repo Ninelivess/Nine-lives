@@ -29,7 +29,7 @@ function SignInner() {
   if (!cat) return <p>No cat #{id}. <Link href="/">Back to the alley</Link></p>;
   const sale = snap.listings?.find((l) => l.catId === id);
   const p = PERSONALITIES.find((x) => x.key === cat.personality);
-  const [t1, t2] = tileColors(cat.personality, cat.alive);
+  const [t1, t2] = tileColors(cat.personality, cat.alive, cat.id, cat.generation);
 
   let title = "";
   let detail = "";
@@ -66,6 +66,20 @@ function SignInner() {
     detail = `${near(amountNear * 1000)} goes into ${cat.name}'s game wallet so it can buy fish. This is a gift: it raises the cat's stake.`;
     if (!cat.alive) blocked = "Ghosts cannot eat.";
     if (!(amountNear >= 0.001)) blocked = "Amount must be at least 0.001 NEAR.";
+  } else if (action === "join") {
+    const h = snap.homes?.find((x) => x.home === cat.home);
+    title = `Take a seat in the ${h?.name ?? "home"} fan club`;
+    method = "join_fan_club";
+    args = { home: cat.home };
+    deposit = milliToYocto(10);
+    detail = `One seat costs 0.01 NEAR (${h?.fans ?? 0} of ${h?.seats ?? 350} taken). Half goes into ${cat.alive ? `${cat.name}'s wallet so it can eat` : "the nursery"}, half saves up for this home's next kitten. Fans share 30% of every profit claim and half of every kitten adoption from this home, for all nine lives.`;
+    if (h && h.fans >= h.seats) blocked = "This fan club is full.";
+  } else if (action === "claim_fans") {
+    const h = snap.homes?.find((x) => x.home === cat.home);
+    title = `Collect your ${h?.name ?? "fan club"} rewards`;
+    method = "claim_fan_rewards";
+    args = { home: cat.home };
+    detail = "Sends the rewards paid into your seat since you joined (or last collected) to your wallet.";
   } else blocked = `Unknown action "${action}".`;
 
   const go = async () => {

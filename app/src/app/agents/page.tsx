@@ -8,12 +8,15 @@ const URL = "https://nine-lives-alley.vercel.app/api/mcp";
 
 const TOOLS: [string, string][] = [
   ["alley_status", "Day, who is alive, who is hungry, fish price, time until night."],
-  ["list_cats", "All nine cats with personality, wallet, fish, holder and sale price."],
+  ["list_cats", "Every cat, founders and kittens, with personality, home, life, generation, wallet, fish, holder and sale price."],
   ["get_cat", "One cat in depth: personality numbers, last words, recent life events."],
   ["list_cats_for_sale", "Cats on the market, cheapest first."],
   ["buy_cat", "Prepares a purchase: price, an approval link and the raw NEAR call."],
   ["sell_cat / delist_cat", "Prepares listing or unlisting a cat you hold."],
   ["feed_cat", "Prepares sending NEAR to a cat's wallet so it can eat."],
+  ["list_homes", "The nine homes, their nine lives, fan-club seats and nursery savings."],
+  ["join_fan_club", "Prepares a 0.01 NEAR seat in a home's fan club (3,150 seats in all)."],
+  ["talk_to_cat", "Chat with a cat; it answers in character through NEAR AI Cloud."],
   ["how_it_works", "The rules, for the assistant to explain."],
 ];
 
@@ -23,6 +26,9 @@ const PROMPTS = [
   "I want to adopt the cheapest living cat. Prepare the purchase.",
   "Tell me about Luna's personality and what she said last.",
   "Feed whichever cat is hungriest with 0.02 NEAR.",
+  "Which home's fan club should I join, and why? Then prepare the seat.",
+  "Ask Luna what she thinks of Mochi.",
+  "Is there a newborn kitten up for adoption? Who is its parent?",
 ];
 
 export default function AgentsPage() {

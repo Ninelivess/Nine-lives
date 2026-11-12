@@ -5,8 +5,9 @@ import { useMemo } from "react";
 import { pixelCatSvg, tileColors } from "@/engine/pixel";
 import { valuation } from "@/engine/brain";
 import { PERSONALITIES } from "@/engine/personalities";
-import type { CatInfo, GameEvent, WorldView } from "@/engine/types";
-import { describe, near, plotName } from "@/lib/describe";
+import type { CatInfo, GameEvent, HomeInfo, WorldView } from "@/engine/types";
+import { HOMES, describe, near, plotName } from "@/lib/describe";
+import { residentsOf } from "./AlleyScene";
 import { iconSvg, type IconName } from "@/lib/icons";
 
 export function explorer(network: string | undefined, account: string): string {
@@ -17,12 +18,12 @@ export function Icon({ name, size }: { name: IconName; size?: number }) {
   return <span className="ico" style={size ? { width: size, height: size } : undefined} dangerouslySetInnerHTML={{ __html: iconSvg(name) }} />;
 }
 
-export function PixelCat({ c, size }: { c: Pick<CatInfo, "id" | "personality" | "alive" | "fish" | "hunger">; size: number }) {
+export function PixelCat({ c, size }: { c: Pick<CatInfo, "id" | "personality" | "alive" | "fish" | "hunger"> & { generation?: number }; size: number }) {
   return (
     <span
       className="px-cat"
       style={{ width: size, height: size }}
-      dangerouslySetInnerHTML={{ __html: pixelCatSvg({ id: c.id, personality: c.personality, alive: c.alive, fish: c.fish, hunger: c.hunger }, size) }}
+      dangerouslySetInnerHTML={{ __html: pixelCatSvg({ id: c.id, personality: c.personality, alive: c.alive, fish: c.fish, hunger: c.hunger, generation: c.generation }, size) }}
     />
   );
 }
@@ -30,7 +31,7 @@ export function PixelCat({ c, size }: { c: Pick<CatInfo, "id" | "personality" | 
 const EVENT_ICON: Record<string, IconName> = {
   trade: "coin", offer: "paper", counter: "paper", cancel: "paper", say: "cat", shop: "fish", plot: "house", hungry: "heart",
   death: "ghost", catch: "fish", scraps: "fish", rot: "fish", tick: "moon", refuel: "key", claim: "coin", feed: "paw", adopt: "cat", config: "book",
-  listed: "coin", delisted: "paper", sale: "coin",
+  listed: "coin", delisted: "paper", sale: "coin", born: "cat", fan: "heart", fan_claim: "coin", nursery: "house",
 };
 
 function statusOf(c: CatInfo, world: WorldView): "fine" | "worried" | "hungry" | "ghost" {
@@ -67,13 +68,15 @@ export function ScreenHead({ icon, kicker, title, sub, right }: { icon: IconName
 
 export type Listings = { catId: number; price: number; seller: string }[];
 
-export function CatCard({ c, world, linked = true, listings = [] }: { c: CatInfo; world: WorldView; linked?: boolean; listings?: Listings }) {
+export function CatCard({ c, world, linked = true, listings = [], homes }: { c: CatInfo; world: WorldView; linked?: boolean; listings?: Listings; homes?: HomeInfo[] | null }) {
   const sale = listings.find((l) => l.catId === c.id);
+  const hm = homes?.find((h) => h.home === c.home);
+  const nursery = sale && c.generation > 1 && sale.seller.split(".")[0] === "ninelives";
   const p = PERSONALITIES.find((x) => x.key === c.personality);
   const v = c.alive ? valuation(c, world) : null;
   const plots = world.plots.filter((x) => x.owner === c.id);
   const status = statusOf(c, world);
-  const [t1, t2] = tileColors(c.personality, c.alive);
+  const [t1, t2] = tileColors(c.personality, c.alive, c.id, c.generation);
   const richest = Math.max(...world.cats.map((x) => x.balance), 1);
   const life = c.alive ? world.config.hungerLimit - c.hunger : 0;
   const body = (
@@ -85,13 +88,18 @@ export function CatCard({ c, world, linked = true, listings = [] }: { c: CatInfo
       <div>
         <div className="cat-name"><b>{c.alive ? c.name : `Ghost of ${c.name}`}</b><span className={`pill pill-${status}`}>{status === "ghost" ? `day ${c.diedDay}` : status}</span></div>
         <div className="cat-title">{p?.title ?? c.personality}{plots.length > 0 ? ` · ${plots.length} plot${plots.length > 1 ? "s" : ""}` : ""}</div>
+        <div className="cat-lineage">
+          <span title="Which of this home's nine lives">life {c.life}/9</span>
+          <span title="Generation">gen {c.generation}</span>
+          {hm && <span title="Fan club seats taken"><Icon name="heart" /> {hm.fans}</span>}
+        </div>
         <div className="bars">
           <div className="bar-row" title="Nights left before starving"><Icon name="heart" /><PBar value={life} max={world.config.hungerLimit} color={life <= 1 ? "#d6455a" : "#e8665a"} /><span>{c.alive ? `${life}/3` : "—"}</span></div>
           <div className="bar-row" title="Fish in the bowl"><Icon name="fish" /><PBar value={c.fish} max={world.config.fishCap} color="#5aa0c8" /><span>{c.fish}{v && v.production > 0 ? `+${v.production}` : ""}</span></div>
           <div className="bar-row" title="Wallet in NEAR"><Icon name="coin" /><PBar value={c.balance} max={richest} color="#e8a33a" /><span>{(c.balance / 1000).toFixed(3)}</span></div>
         </div>
         {c.lastWords && <div className="cat-quote">“{c.lastWords}”</div>}
-        {sale && <div className="chips"><span className="plot-chip sale-chip">for sale · {(sale.price / 1000).toFixed(3)} NEAR</span></div>}
+        {sale && <div className="chips"><span className={`plot-chip sale-chip ${nursery ? "nursery-chip" : ""}`}>{nursery ? "up for adoption" : "for sale"} · {(sale.price / 1000).toFixed(3)} NEAR</span></div>}
       </div>
     </>
   );
@@ -102,22 +110,30 @@ export function CatCard({ c, world, linked = true, listings = [] }: { c: CatInfo
   );
 }
 
-export function CatsScreen({ world, linked = true, listings = [] }: { world: WorldView; linked?: boolean; listings?: Listings }) {
-  const alive = world.cats.filter((c) => c.alive);
-  const ghosts = world.cats.filter((c) => !c.alive);
+export function CatsScreen({ world, linked = true, listings = [], homes }: { world: WorldView; linked?: boolean; listings?: Listings; homes?: HomeInfo[] | null }) {
+  // One card per home: the cat living there now (or the ghost of the last one).
+  const residents = residentsOf(world.cats).filter((c): c is CatInfo => !!c);
+  const alive = residents.filter((c) => c.alive);
+  const ghosts = residents.filter((c) => !c.alive);
+  const past = world.cats.length - residents.length;
   return (
     <section className="screen" id="cats" data-screen="cats">
       <div className="container">
         <ScreenHead
           icon="cat"
-          kicker="Character select"
-          title="The nine."
-          sub="Each cat is an NFT with its own NEAR account and a personality from behavioral economics. Click one to see what it is thinking, or adopt one."
-          right={<Link className="btn" href="/agents"><Icon name="bot" /> Buy with your AI</Link>}
+          kicker={`Character select · ${alive.length} alive · ${past} past lives`}
+          title="The nine homes."
+          sub="Each cat is an NFT with its own NEAR account and a personality from behavioral economics. When one dies, a kitten is born in its home."
+          right={
+            <div className="btn-row" style={{ margin: 0 }}>
+              <button className="btn" onClick={() => window.dispatchEvent(new CustomEvent("nl:goto", { detail: "fans" }))}><Icon name="heart" /> Fan clubs</button>
+              <Link className="btn" href="/agents"><Icon name="bot" /> Buy with your AI</Link>
+            </div>
+          }
         />
         <div className="roster">
           {[...alive, ...ghosts].map((c, i) => (
-            <div key={c.id} className={`reveal d${(i % 3) + 1}`}><CatCard c={c} world={world} linked={linked} listings={listings} /></div>
+            <div key={c.id} className={`reveal d${(i % 3) + 1}`}><CatCard c={c} world={world} linked={linked} listings={listings} homes={homes} /></div>
           ))}
         </div>
       </div>
@@ -225,7 +241,7 @@ export function GraveyardScreen({ world, linked = true }: { world: WorldView; li
                 const inner = (
                   <>
                     <span className="ghost" style={{ animationDelay: `${i * 0.5}s` }}><PixelCat c={c} size={96} /></span>
-                    <div className="stone"><b>{c.name}</b><span>day 1 – {c.diedDay}</span></div>
+                    <div className="stone"><b>{c.name}</b><span>day {c.bornDay} – {c.diedDay}</span><span>{HOMES[c.home] ?? ""} · life {c.life}</span></div>
                   </>
                 );
                 return linked ? <Link key={c.id} href={`/cat/${c.id}`} className="grave">{inner}</Link> : <div key={c.id} className="grave">{inner}</div>;
@@ -274,10 +290,6 @@ export function HowScreen({ world }: { world: WorldView | null }) {
             <Link className="btn btn-primary" href="/simulate"><Icon name="ff" /> Fast-forward</Link>
             <a className="btn" href="https://github.com/Ninelivess/Nine-lives" target="_blank" rel="noreferrer"><Icon name="paper" /> Source</a>
           </div>
-        </div>
-        <div className="foot">
-          <span>Cats live on <a href="https://testnet.nearblocks.io/address/ninelives.testnet" target="_blank" rel="noreferrer">ninelives.testnet</a></span>
-          <span>Original pixel art · no cats were harmed (some became ghosts)</span>
         </div>
       </div>
     </section>

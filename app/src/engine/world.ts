@@ -69,6 +69,10 @@ export class SimWorld {
         ownerId: "sim.owner",
         plots: [],
         gasBalance: config.gasTank,
+        home: i,
+        generation: 1,
+        parent: null,
+        life: 1,
       });
       this.event("adopt", i + 1, null, null, 0, 0, null, `${p.name} the ${p.key} cat is born`);
     });

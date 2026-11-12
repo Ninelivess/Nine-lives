@@ -60,6 +60,32 @@ export interface CatInfo {
   plots: number[];
   /** NEAR left on the cat's own account for gas, mN (chain only). */
   gasBalance?: number;
+  /** Which of the nine homes the cat lives in (0-8). */
+  home: number;
+  /** 1 for the founders, parent's generation + 1 for kittens. */
+  generation: number;
+  /** The cat it was born from (the wealthiest living cat at the time). */
+  parent: number | null;
+  /** Which of its home's nine lives it is (1-9). */
+  life: number;
+}
+
+/** One of the nine homes in the alley, with its fan club. */
+export interface HomeInfo {
+  home: number;
+  name: string;
+  /** The cat living there now, or the ghost of the last one. 0 = nobody. */
+  resident: number;
+  residentAlive: boolean;
+  livesUsed: number;
+  livesLeft: number;
+  /** Every cat that has lived there, oldest first. */
+  cats: number[];
+  fans: number;
+  seats: number;
+  seatPrice: number; // mN
+  nursery: number; // mN
+  rewardPerSeat: number; // mN
 }
 
 export interface PlotInfo {

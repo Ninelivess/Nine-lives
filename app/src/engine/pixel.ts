@@ -9,6 +9,40 @@ export interface PixelInput {
   hunger: number;
   /** Eyes closed (the cat is asleep in its home). */
   sleeping?: boolean;
+  /** Kittens (generation 2+) get a coat that drifts a little from their parent's. */
+  generation?: number;
+}
+
+function hexToHsl(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1))));
+  return `#${[f(0), f(8), f(4)].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** Shift hue (and a little lightness) of one color. Greys get a faint tint so they change too. */
+function shift(hex: string, deg: number, dl: number): string {
+  const [h, s, l] = hexToHsl(hex);
+  return hslToHex((h + deg + 360) % 360, Math.max(s, 0.18), Math.max(0.05, Math.min(0.95, l + dl)));
+}
+
+/** A kitten's coat: its parent's palette with the fur hue drifted, deterministic per cat. */
+function kittenPalette(pal: Palette, id: number): Palette {
+  const deg = ((id * 67) % 90) - 45;
+  const dl = (((id * 31) % 9) - 4) / 100;
+  return { ...pal, F: shift(pal.F, deg, dl), S: shift(pal.S, deg, dl), L: shift(pal.L, deg / 2, 0), bg: [shift(pal.bg[0], deg, 0), shift(pal.bg[1], deg, 0)] };
 }
 
 // Legend: . empty, O outline, F fur, S shade, L light (muzzle, belly, paws), P pink (ears, nose),
@@ -222,7 +256,8 @@ function ghostBottom(grid: string[][]): void {
 }
 
 export function pixelGrid(c: PixelInput): { grid: string[][]; pal: Palette } {
-  const pal = c.alive ? PALETTES[c.personality] ?? PALETTES.shark : GHOST;
+  const base = PALETTES[c.personality] ?? PALETTES.shark;
+  const pal = !c.alive ? GHOST : (c.generation ?? 1) > 1 ? kittenPalette(base, c.id) : base;
   const grid = BASE.map((r) => [...r]);
   const put = (px: Px[]) => px.forEach(([r, col, v]) => r >= 0 && r < 32 && col >= 0 && col < 32 && (grid[r][col] = v));
   if (c.alive) put(tail());
@@ -289,6 +324,8 @@ export function pixelCatSvg(c: PixelInput, size = 256, background = false): stri
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" width="${size}" height="${size}" shape-rendering="crispEdges" role="img" aria-label="${c.alive ? "cat" : "ghost cat"} #${c.id}">${bg}<g${c.alive ? "" : ' opacity=".9"'}>${rects.join("")}${halo}</g></svg>`;
 }
 
-export function tileColors(personality: string, alive: boolean): [string, string] {
-  return alive ? (PALETTES[personality] ?? PALETTES.shark).bg : GHOST.bg;
+export function tileColors(personality: string, alive: boolean, id = 0, generation = 1): [string, string] {
+  if (!alive) return GHOST.bg;
+  const base = PALETTES[personality] ?? PALETTES.shark;
+  return generation > 1 ? kittenPalette(base, id).bg : base.bg;
 }

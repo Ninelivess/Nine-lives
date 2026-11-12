@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlleyScene, placeholderCats } from "@/components/AlleyScene";
 import { DEFAULT_CONFIG, PLOTS } from "@/engine/world";
 import type { WorldView } from "@/engine/types";
 import { CatsScreen, GazetteScreen, GraveyardScreen, HowScreen, Icon } from "@/components/AlleyView";
+import { FamilyScreen, FansScreen, FaqScreen, TalkScreen } from "@/components/MoreScreens";
+import { describe } from "@/lib/describe";
+import type { GameEvent } from "@/engine/types";
 import { Intro } from "@/components/Intro";
 import { Pager, goToPage } from "@/components/Pager";
 import { PERSONALITIES } from "@/engine/personalities";
@@ -22,7 +25,38 @@ const LINES = [
   "Each one is an NFT and its own account.",
   "They trade, bluff and must eat to survive.",
   "Three hungry nights and the NFT becomes a ghost.",
+  "Then a kitten is born. Every home has nine lives.",
+  "3,150 fans can back them. Your AI can too.",
 ];
+
+/** A news crawl of the latest on-chain events along the bottom of the stage. */
+function Ticker({ world, events }: { world: WorldView | null; events: GameEvent[] }) {
+  const items = useMemo(() => {
+    if (!world) return [];
+    const cats = new Map(world.cats.map((c) => [c.id, c]));
+    return events
+      .filter((e) => !["config", "refuel", "rot", "adopt", "listed", "delisted"].includes(e.kind))
+      .slice(-14)
+      .reverse()
+      .map((e) => {
+        const d = describe(e, cats, world.plots);
+        return { id: e.id, day: e.day, text: d.quote && e.kind !== "born" ? `${d.text}: “${d.quote}”` : d.text };
+      });
+  }, [world, events]);
+  if (!items.length) return null;
+  const row = items.map((i) => (
+    <span key={i.id} className="tick-item"><b>D{i.day}</b> {i.text}</span>
+  ));
+  return (
+    <div className="ticker" aria-label="Latest from the alley">
+      <span className="ticker-live"><i /> LIVE</span>
+      <div className="ticker-track" style={{ animationDuration: `${Math.max(40, items.length * 7)}s` }}>
+        <div>{row}</div>
+        <div aria-hidden>{row}</div>
+      </div>
+    </div>
+  );
+}
 
 function useTyped(lines: string[], start: number) {
   const [text, setText] = useState("");
@@ -75,7 +109,7 @@ export default function Home() {
   const alley = (
     <section className="screen home in" id="alley" data-screen="alley">
       <div className="home-scene">
-        <AlleyScene world={world} wakeDelay={2800} onPick={(cat, r) => setPick({ cat, x: r.left + r.width / 2, y: r.top })} />
+        <AlleyScene world={world} events={snap?.events} wakeDelay={2800} onPick={(cat, r) => setPick({ cat, x: r.left + r.width / 2, y: r.top })} />
       </div>
       <div className="home-card pbox">
         <h1 className="home-title">Nine<br /><span className="gold">Lives</span></h1>
@@ -98,6 +132,7 @@ export default function Home() {
           <Link className="btn" href={`/cat/${live.id}`}><Icon name="paper" /> Open profile</Link>
         </div>
       )}
+      <Ticker world={world} events={snap?.events ?? []} />
       <button className="scroll-down" onClick={() => goToPage("cats")}>▼ next page</button>
       <span className="swipe-hint">◀ swipe the alley ▶</span>
     </section>
@@ -111,10 +146,14 @@ export default function Home() {
       <Pager
         pages={[
           { id: "alley", node: alley },
-          { id: "cats", node: <CatsScreen world={w} listings={snap?.listings ?? []} /> },
+          { id: "cats", node: <CatsScreen world={w} listings={snap?.listings ?? []} homes={snap?.homes} /> },
+          { id: "fans", node: <FansScreen world={w} homes={snap?.homes} fans={snap?.fans} fanSeats={snap?.fanSeats} /> },
+          { id: "family", node: <FamilyScreen world={w} homes={snap?.homes} listings={snap?.listings ?? []} /> },
           { id: "gazette", node: <GazetteScreen world={w} events={snap?.events ?? []} /> },
           { id: "graveyard", node: <GraveyardScreen world={w} /> },
+          { id: "talk", node: <TalkScreen world={w} /> },
           { id: "how", node: <HowScreen world={world} /> },
+          { id: "faq", node: <FaqScreen world={world} /> },
         ]}
       />
     </>

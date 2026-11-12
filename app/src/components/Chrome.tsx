@@ -34,6 +34,7 @@ export function Hud() {
             <span className="hud-stat" title="Next night">{left === 0 ? "night now" : `${Math.floor((left ?? 0) / 60)}:${String((left ?? 0) % 60).padStart(2, "0")}`}</span>
             <span className="hud-stat" title="Alive"><Icon name="heart" /> {w.cats.filter((c) => c.alive).length}</span>
             <span className="hud-stat" title="Ghosts"><Icon name="ghost" /> {w.cats.filter((c) => !c.alive).length}</span>
+            {snap?.fans !== undefined && <span className="hud-stat hud-fans" title="Fan-club seats taken"><Icon name="paw" /> {snap.fans}/{snap.fanSeats ?? 3150}</span>}
           </div>
         )}
         <WalletButton />
@@ -43,11 +44,15 @@ export function Hud() {
 }
 
 const SLOTS: { id: string; icon: IconName; label: string }[] = [
-  { id: "alley", icon: "house", label: "The alley" },
-  { id: "cats", icon: "cat", label: "The nine" },
+  { id: "alley", icon: "moon", label: "Live alley" },
+  { id: "cats", icon: "cat", label: "The nine homes" },
+  { id: "fans", icon: "heart", label: "Fan clubs" },
+  { id: "family", icon: "ghost", label: "Nine lives" },
   { id: "gazette", icon: "paper", label: "Gazette" },
   { id: "graveyard", icon: "tomb", label: "Graveyard" },
+  { id: "talk", icon: "bot", label: "Talk to a cat" },
   { id: "how", icon: "book", label: "How it works" },
+  { id: "faq", icon: "key", label: "FAQ & roadmap" },
 ];
 
 /** Game-style hotbar. On the home page it tracks the screen in view; keys 1-6 jump. */
@@ -102,8 +107,7 @@ export function Hotbar() {
         if (onHome) goToPage(SLOTS[i].id);
         else window.location.href = `/#${SLOTS[i].id}`;
       }
-      if (e.key === "6") window.location.href = "/simulate";
-      if (e.key === "7") window.location.href = "/agents";
+      if (e.key === "0") window.location.href = "/agents";
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -129,14 +133,14 @@ export function Hotbar() {
           <span className="tip pbox">{s.label}</span>
         </a>
       ))}
-      <Link href="/simulate" className={`slot ${path === "/simulate" ? "on" : ""}`} aria-label="Fast-forward">
-        <span className="key">6</span>
+      <span className="slot-sep" aria-hidden />
+      <Link href="/simulate" className={`slot slot-extra ${path === "/simulate" ? "on" : ""}`} aria-label="Fast-forward">
         <Icon name="ff" />
         <span className="tip pbox">Fast-forward</span>
       </Link>
-      <Link href="/agents" className={`slot ${path === "/agents" ? "on" : ""}`} aria-label="Buy with your AI">
-        <span className="key">7</span>
-        <Icon name="bot" />
+      <Link href="/agents" className={`slot slot-extra ${path === "/agents" ? "on" : ""}`} aria-label="Buy with your AI">
+        <span className="key">0</span>
+        <Icon name="coin" />
         <span className="tip pbox">Buy with your AI</span>
       </Link>
     </nav>

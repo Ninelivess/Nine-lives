@@ -9,9 +9,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const catId = Number(id);
   let svg: string;
   try {
-    const c = await view<{ id: number; personality: string; alive: boolean; fish: number; hunger: number } | null>("get_cat", { cat_id: catId });
+    const c = await view<{ id: number; personality: string; alive: boolean; fish: number; hunger: number; generation?: number } | null>("get_cat", { cat_id: catId });
     if (!c) return new Response("No such cat", { status: 404 });
-    svg = pixelCatSvg({ id: c.id, personality: c.personality, alive: c.alive, fish: c.fish, hunger: c.hunger }, 512, true);
+    svg = pixelCatSvg({ id: c.id, personality: c.personality, alive: c.alive, fish: c.fish, hunger: c.hunger, generation: c.generation }, 512, true);
   } catch {
     return new Response("RPC unavailable", { status: 502 });
   }

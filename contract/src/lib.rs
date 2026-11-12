@@ -52,6 +52,16 @@ enum StorageKey {
     Events,
     /// Added after launch. Lives outside the contract struct so the existing state stays readable.
     Listings,
+    // Generations and fan clubs (added after launch, same reason).
+    Lineage,
+    Residents,
+    LivesUsed,
+    BrainKeys,
+    FanCount,
+    FanSnap,
+    FanList,
+    FanAcc,
+    Nursery,
 }
 
 #[near(serializers = [borsh, json])]
@@ -205,12 +215,187 @@ fn listings() -> LookupMap<TokenId, U128> {
     LookupMap::new(StorageKey::Listings)
 }
 
+// ----------------------------------------------------------------------
+// Nine lives: homes, generations and fan clubs
+// ----------------------------------------------------------------------
+
+/// The alley has nine homes. Each home has nine lives: when its cat dies, a kitten can be born
+/// there, until all nine lives are used.
+pub const HOMES: u8 = 9;
+pub const LIVES_PER_HOME: u8 = 9;
+/// Every home has a fan club with this many seats: 9 x 350 = 3,150 people can back the alley.
+pub const SEATS_PER_HOME: u32 = 350;
+/// Price of one fan-club seat (0.01 NEAR). One seat per wallet per home.
+pub const SEAT_PRICE_MILLI: u128 = 10;
+/// Newborn kittens are put up for adoption at this price (0.1 NEAR).
+pub const ADOPTION_PRICE_MILLI: u128 = 100;
+/// Share of every profit claim that goes to the fans of the cat's home.
+pub const FAN_CUT_PCT: u128 = 30;
+/// Extra NEAR a birth must be able to pay on top of gas tank and stake (covers storage).
+const BIRTH_STORAGE_BUDGET_MILLI: u128 = 40;
+
+pub const HOME_NAMES: [&str; 9] = [
+    "Cardboard Box",
+    "Laundry Basket",
+    "Trash Can",
+    "Wooden Crate",
+    "Flowerpot",
+    "Paper Bag",
+    "Fish Crate",
+    "Treasure Chest",
+    "Cat Bed",
+];
+
+const KITTEN_NAMES: [&str; 27] = [
+    "Miso", "Tofu", "Pepper", "Ginger", "Olive", "Pudding", "Bean", "Sushi", "Waffle", "Nugget",
+    "Boba", "Clover", "Pixel", "Simit", "Lokum", "Peanut", "Mango", "Bubbles", "Socks", "Cookie",
+    "Zeytin", "Pumpkin", "Mocha", "Tiny", "Kiwi", "Pesto", "Tarcin",
+];
+
+/// Where a cat lives and who its parent is. The first nine cats are generation 1, one per home.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Lineage {
+    pub home: u8,
+    /// 1 for the founders, parent's generation + 1 for kittens.
+    pub generation: u16,
+    pub parent: Option<u32>,
+    /// Which of the home's nine lives this cat is (1-9).
+    pub life: u8,
+}
+
+fn lineage_of(id: u32) -> Lineage {
+    let m: LookupMap<u32, Lineage> = LookupMap::new(StorageKey::Lineage);
+    m.get(&id).cloned().unwrap_or(Lineage {
+        home: id.saturating_sub(1).min(HOMES as u32 - 1) as u8,
+        generation: 1,
+        parent: None,
+        life: 1,
+    })
+}
+
+/// The cat that lives in `home` now (alive, or the ghost of the last one). 0 = nobody yet.
+fn resident(home: u8) -> u32 {
+    let m: LookupMap<u8, u32> = LookupMap::new(StorageKey::Residents);
+    if let Some(id) = m.get(&home) {
+        return *id;
+    }
+    // Founders: cat N lives in home N-1, unless that id belongs to a kitten born elsewhere.
+    let founder = home as u32 + 1;
+    if lineage_of(founder).home == home {
+        founder
+    } else {
+        0
+    }
+}
+
+fn lives_used(home: u8) -> u8 {
+    let m: LookupMap<u8, u8> = LookupMap::new(StorageKey::LivesUsed);
+    m.get(&home).copied().unwrap_or(1)
+}
+
+fn fan_count(home: u8) -> u32 {
+    let m: LookupMap<u8, u32> = LookupMap::new(StorageKey::FanCount);
+    m.get(&home).copied().unwrap_or(0)
+}
+
+/// Fan rewards paid into a home so far, per seat (yoctoNEAR).
+fn fan_acc(home: u8) -> u128 {
+    let m: LookupMap<u8, U128> = LookupMap::new(StorageKey::FanAcc);
+    m.get(&home).map(|v| v.0).unwrap_or(0)
+}
+
+fn nursery(home: u8) -> u128 {
+    let m: LookupMap<u8, U128> = LookupMap::new(StorageKey::Nursery);
+    m.get(&home).map(|v| v.0).unwrap_or(0)
+}
+
+fn set_nursery(home: u8, v: u128) {
+    let mut m: LookupMap<u8, U128> = LookupMap::new(StorageKey::Nursery);
+    m.insert(home, U128(v));
+}
+
+fn fan_key(home: u8, account: &AccountId) -> String {
+    format!("{}:{}", home, account)
+}
+
+fn milli(v: u128) -> u128 {
+    NearToken::from_millinear(v).as_yoctonear()
+}
+
+/// Copies the parent's personality numbers with small random mutations (about +-15%, sometimes
+/// more). Returns the new traits JSON and a short description of what changed.
+pub fn mutate_traits(parent: &str, rnd: &[u8]) -> (String, String) {
+    use near_sdk::serde_json::{Map, Value};
+    let mut obj: Map<String, Value> = match near_sdk::serde_json::from_str::<Value>(parent) {
+        Ok(Value::Object(m)) => m,
+        _ => return (parent.to_string(), String::new()),
+    };
+    let mut changes: Vec<String> = vec![];
+    let keys: Vec<String> = obj.keys().cloned().collect();
+    for (i, k) in keys.iter().enumerate() {
+        let Some(v) = obj.get(k).and_then(|v| v.as_f64()) else { continue };
+        let b = rnd[(i * 2) % rnd.len()] as f64;
+        let big = rnd[(i * 2 + 1) % rnd.len()] < 26; // ~10%: a big jump
+        let spread = if big { 0.45 } else { 0.15 };
+        let factor = 1.0 + (b / 255.0 * 2.0 - 1.0) * spread;
+        let (lo, hi, int) = match k.as_str() {
+            "lossAversion" => (0.5, 3.5, false),
+            "endowment" => (0.5, 3.0, false),
+            "safetyStock" => (0.0, 8.0, true),
+            "activity" => (0.2, 1.0, false),
+            _ => (0.0, 1.0, false),
+        };
+        // A trait at zero can still mutate upwards a little.
+        let base = if v == 0.0 && !int { 0.05 * (b / 255.0) } else { v * factor };
+        let mut nv = base.clamp(lo, hi);
+        nv = if int { (v + ((b as i32 % 3) - 1) as f64).clamp(lo, hi) } else { (nv * 100.0).round() / 100.0 };
+        let d = nv - v;
+        if d.abs() >= 0.05 || (int && d != 0.0) {
+            let shown = if int { format!("{:+}", d as i64) } else { format!("{:+.2}", d) };
+            changes.push(format!("{} {}", k, shown));
+        }
+        obj.insert(k.clone(), Value::from(nv));
+    }
+    (near_sdk::serde_json::to_string(&Value::Object(obj)).unwrap(), changes.join(", "))
+}
+
+#[near(serializers = [json])]
+pub struct HomeView {
+    pub home: u8,
+    pub name: String,
+    /// The cat living here now (or the ghost of the last one).
+    pub resident: u32,
+    pub resident_alive: bool,
+    pub lives_used: u8,
+    pub lives_left: u8,
+    /// Every cat that has lived here, oldest first.
+    pub cats: Vec<u32>,
+    pub fans: u32,
+    pub seats: u32,
+    pub seat_price: U128,
+    /// NEAR saved for this home's next kitten.
+    pub nursery: U128,
+    /// Total fan rewards paid per seat so far.
+    pub reward_per_seat: U128,
+}
+
+#[near(serializers = [json])]
+pub struct FanSeat {
+    pub home: u8,
+    pub pending: U128,
+}
+
 #[near(serializers = [json])]
 pub struct CatView {
     #[serde(flatten)]
     pub cat: Cat,
     pub owner_id: Option<AccountId>,
     pub plots: Vec<u8>,
+    pub home: u8,
+    pub generation: u16,
+    pub parent: Option<u32>,
+    pub life: u8,
 }
 
 #[near(serializers = [json])]
@@ -229,6 +414,11 @@ pub struct GameState {
     pub plots: Vec<Plot>,
     pub config: Config,
     pub admin: AccountId,
+    /// People holding a fan-club seat, all homes together.
+    pub fans: u32,
+    pub fan_seats: u32,
+    /// Lives used across the nine homes (founders + kittens).
+    pub lives_used: u32,
 }
 
 #[near(contract_state)]
@@ -821,6 +1011,9 @@ impl NineLives {
         self.last_tick_ms = now;
         let alive = self.cats.values().filter(|c| c.alive).count() as u32;
         self.push_event("tick", None, None, None, ate, self.fish_price, None, format!("Day {} ends. {} cats ate, {} alive.", day, ate, alive));
+
+        // 7. Dawn: at most one kitten is born, in a home that has been dark for a night.
+        self.try_birth();
         self.day
     }
 
@@ -844,9 +1037,16 @@ impl NineLives {
         cat.balance = U128(yocto(cat.balance) - amount);
         cat.claimed = U128(yocto(cat.claimed) + amount);
         self.cats.insert(id, cat);
-        self.push_event("claim", Some(id), None, None, 0, amount, None, owner.to_string());
-        Promise::new(owner).transfer(NearToken::from_yoctonear(amount)).detach();
-        U128(amount)
+        // The home's fan club gets its cut first.
+        let home = lineage_of(id).home;
+        let fan_cut = if fan_count(home) > 0 { amount * FAN_CUT_PCT / 100 } else { 0 };
+        if fan_cut > 0 {
+            self.reward_fans(home, fan_cut);
+        }
+        let to_holder = amount - fan_cut;
+        self.push_event("claim", Some(id), None, None, 0, to_holder, None, owner.to_string());
+        Promise::new(owner).transfer(NearToken::from_yoctonear(to_holder)).detach();
+        U128(to_holder)
     }
 
     /// Anyone can top up a living cat's wallet. It increases the cat's stake.
@@ -902,7 +1102,18 @@ impl NineLives {
         l.remove(&token_id);
         drop(l);
         self.tokens.internal_transfer(&seller, &buyer, &token_id, None, Some("bought in the alley".to_string()));
-        Promise::new(seller.clone()).transfer(NearToken::from_yoctonear(price.0)).detach();
+        if seller == env::current_account_id() {
+            // A newborn kitten adopted from the nursery: the fee goes back to its home,
+            // half to the fan club and half to the nursery for the next life.
+            let home = lineage_of(token_id.parse().unwrap_or(0)).home;
+            let to_fans = if fan_count(home) > 0 { price.0 / 2 } else { 0 };
+            if to_fans > 0 {
+                self.reward_fans(home, to_fans);
+            }
+            set_nursery(home, nursery(home) + price.0 - to_fans);
+        } else {
+            Promise::new(seller.clone()).transfer(NearToken::from_yoctonear(price.0)).detach();
+        }
         if deposit > price.0 {
             Promise::new(buyer.clone()).transfer(NearToken::from_yoctonear(deposit - price.0)).detach();
         }
@@ -931,8 +1142,140 @@ impl NineLives {
     }
 
     // ------------------------------------------------------------------
+    // Fan clubs: up to 350 people back each home (3,150 in all)
+    // ------------------------------------------------------------------
+
+    /// Take a seat in a home's fan club for 0.01 NEAR (one seat per wallet per home).
+    /// Half of the seat price goes into the wallet of the cat living there, so fans help keep it
+    /// alive; the other half goes to the home's nursery and pays for its next kitten.
+    /// Fans earn 30% of every profit claim on the home's cats and half of every kitten adoption.
+    #[payable]
+    pub fn join_fan_club(&mut self, home: u8) -> u32 {
+        require!(home < HOMES, "No such home (0-8)");
+        let who = env::predecessor_account_id();
+        let key = fan_key(home, &who);
+        let price = milli(SEAT_PRICE_MILLI);
+        let deposit = env::attached_deposit().as_yoctonear();
+        require!(deposit >= price, "Attach 0.01 NEAR for a seat");
+        let n = fan_count(home);
+        require!(n < SEATS_PER_HOME, "This fan club is full");
+        let storage_before = env::storage_usage();
+        {
+            let mut snaps: LookupMap<String, U128> = LookupMap::new(StorageKey::FanSnap);
+            require!(snaps.get(&key).is_none(), "You already have a seat in this fan club");
+            snaps.insert(key, U128(fan_acc(home)));
+            let mut counts: LookupMap<u8, u32> = LookupMap::new(StorageKey::FanCount);
+            counts.insert(home, n + 1);
+            let mut list: LookupMap<String, AccountId> = LookupMap::new(StorageKey::FanList);
+            list.insert(format!("{}#{}", home, n), who.clone());
+        }
+        let storage = env::storage_byte_cost().as_yoctonear() * (env::storage_usage() - storage_before) as u128;
+        let money = price.saturating_sub(storage);
+        let rid = resident(home);
+        let mut to_cat = 0;
+        if let Some(mut cat) = self.cats.get(&rid).cloned() {
+            if cat.alive {
+                to_cat = money / 2;
+                cat.balance = U128(yocto(cat.balance) + to_cat);
+                cat.stake = U128(yocto(cat.stake) + to_cat);
+                self.cats.insert(rid, cat);
+            }
+        }
+        set_nursery(home, nursery(home) + money - to_cat);
+        if deposit > price {
+            Promise::new(who.clone()).transfer(NearToken::from_yoctonear(deposit - price)).detach();
+        }
+        self.push_event("fan", Some(rid), None, None, home as u32, price, None, who.to_string());
+        n + 1
+    }
+
+    /// A fan collects the rewards paid into their seat since they joined (or last claimed).
+    pub fn claim_fan_rewards(&mut self, home: u8) -> U128 {
+        let who = env::predecessor_account_id();
+        let key = fan_key(home, &who);
+        let mut snaps: LookupMap<String, U128> = LookupMap::new(StorageKey::FanSnap);
+        let snap = snaps.get(&key).copied().unwrap_or_else(|| env::panic_str("You have no seat in this fan club"));
+        let acc = fan_acc(home);
+        let pending = acc - snap.0;
+        require!(pending > 0, "Nothing to claim yet");
+        snaps.insert(key, U128(acc));
+        drop(snaps);
+        self.push_event("fan_claim", Some(resident(home)), None, None, home as u32, pending, None, who.to_string());
+        Promise::new(who).transfer(NearToken::from_yoctonear(pending)).detach();
+        U128(pending)
+    }
+
+    /// Anyone can save NEAR for a home's next kitten.
+    #[payable]
+    pub fn donate_nursery(&mut self, home: u8) {
+        require!(home < HOMES, "No such home (0-8)");
+        let d = env::attached_deposit().as_yoctonear();
+        require!(d > 0, "Attach NEAR");
+        set_nursery(home, nursery(home) + d);
+        self.push_event("nursery", Some(resident(home)), None, None, home as u32, d, None, env::predecessor_account_id().to_string());
+    }
+
+    pub fn get_homes(&self) -> Vec<HomeView> {
+        (0..HOMES)
+            .map(|h| {
+                let rid = resident(h);
+                let used = lives_used(h);
+                let mut cats: Vec<u32> = self.cats.keys().copied().filter(|id| lineage_of(*id).home == h).collect();
+                cats.sort();
+                HomeView {
+                    home: h,
+                    name: HOME_NAMES[h as usize].to_string(),
+                    resident: rid,
+                    resident_alive: self.cats.get(&rid).map(|c| c.alive).unwrap_or(false),
+                    lives_used: used,
+                    lives_left: LIVES_PER_HOME - used,
+                    cats,
+                    fans: fan_count(h),
+                    seats: SEATS_PER_HOME,
+                    seat_price: U128(milli(SEAT_PRICE_MILLI)),
+                    nursery: U128(nursery(h)),
+                    reward_per_seat: U128(fan_acc(h)),
+                }
+            })
+            .collect()
+    }
+
+    /// The fan-club seats an account holds, with rewards waiting to be claimed.
+    pub fn get_fan_seats(&self, account_id: AccountId) -> Vec<FanSeat> {
+        let snaps: LookupMap<String, U128> = LookupMap::new(StorageKey::FanSnap);
+        (0..HOMES)
+            .filter_map(|h| {
+                let snap = snaps.get(&fan_key(h, &account_id))?;
+                Some(FanSeat { home: h, pending: U128(fan_acc(h) - snap.0) })
+            })
+            .collect()
+    }
+
+    /// Fans of a home, in the order they joined.
+    pub fn get_fans(&self, home: u8, from_index: Option<u32>, limit: Option<u32>) -> Vec<AccountId> {
+        let list: LookupMap<String, AccountId> = LookupMap::new(StorageKey::FanList);
+        let from = from_index.unwrap_or(0);
+        let to = (from + limit.unwrap_or(50).min(100)).min(fan_count(home));
+        (from..to).filter_map(|i| list.get(&format!("{}#{}", home, i)).cloned()).collect()
+    }
+
+    // ------------------------------------------------------------------
     // Admin
     // ------------------------------------------------------------------
+
+    /// Admin: pre-registers the brain keys of future kittens (cat id -> public key). The matching
+    /// private keys are derived off-chain by the cats' brain runner. Without a key, no birth.
+    pub fn register_brain_keys(&mut self, keys: Vec<(u32, PublicKey)>) {
+        self.assert_admin();
+        let mut m: LookupMap<u32, PublicKey> = LookupMap::new(StorageKey::BrainKeys);
+        let n = keys.len();
+        for (id, k) in keys {
+            require!(id >= self.next_cat_id, "That cat already exists");
+            m.insert(id, k);
+        }
+        drop(m);
+        self.push_event("config", None, None, None, n as u32, 0, None, format!("{} brain keys registered", n));
+    }
 
     pub fn set_day_length(&mut self, day_length_ms: u64) {
         self.assert_admin();
@@ -945,7 +1288,7 @@ impl NineLives {
     pub fn set_config(&mut self, config: Config) {
         self.assert_admin();
         require!(config.day_length_ms >= 10_000, "Day too short");
-        require!(config.max_cats >= self.cats.len(), "Cannot go below existing cats");
+        require!(config.max_cats >= 1, "max_cats must be at least 1");
         self.config = config;
         let text = near_sdk::serde_json::to_string(&self.config).unwrap();
         self.push_event("config", None, None, None, 0, 0, None, text);
@@ -988,6 +1331,9 @@ impl NineLives {
             plots: self.plots.clone(),
             config: self.config.clone(),
             admin: self.admin.clone(),
+            fans: (0..HOMES).map(fan_count).sum(),
+            fan_seats: SEATS_PER_HOME * HOMES as u32,
+            lives_used: (0..HOMES).map(|h| lives_used(h) as u32).sum(),
         }
     }
 
@@ -1049,11 +1395,183 @@ impl NineLives {
     }
 
     fn cat_view(&self, c: &Cat) -> CatView {
+        let l = lineage_of(c.id);
         CatView {
             cat: c.clone(),
             owner_id: self.tokens.owner_by_id.get(&c.id.to_string()),
             plots: self.plots.iter().filter(|p| p.owner == Some(c.id)).map(|p| p.id).collect(),
+            home: l.home,
+            generation: l.generation,
+            parent: l.parent,
+            life: l.life,
         }
+    }
+
+    /// Adds `amount` to the rewards of every seat in `home`. Rounding dust goes to the treasury.
+    fn reward_fans(&mut self, home: u8, amount: u128) {
+        let fans = fan_count(home) as u128;
+        if fans == 0 || amount == 0 {
+            self.treasury += amount;
+            return;
+        }
+        let per = amount / fans;
+        self.treasury += amount - per * fans;
+        let mut acc: LookupMap<u8, U128> = LookupMap::new(StorageKey::FanAcc);
+        let cur = acc.get(&home).map(|v| v.0).unwrap_or(0);
+        acc.insert(home, U128(cur + per));
+    }
+
+    /// Wealth used for natural selection: wallet + fish + plots, valued at shop prices.
+    fn wealth(&self, c: &Cat) -> u128 {
+        let plots = self.plots.iter().filter(|p| p.owner == Some(c.id)).count() as u128;
+        yocto(c.balance) + c.fish as u128 * self.fish_price + plots * yocto(self.config.plot_base_price)
+    }
+
+    /// Called at the end of `tick`. Finds one dark home (its cat died before last night), with
+    /// lives left, a registered brain key for the next cat and enough NEAR in the home's nursery
+    /// plus the treasury, and gives birth to a kitten there.
+    fn try_birth(&mut self) {
+        let id = self.next_cat_id;
+        let keys: LookupMap<u32, PublicKey> = LookupMap::new(StorageKey::BrainKeys);
+        let Some(brain_key) = keys.get(&id).cloned() else { return };
+        let need_base = yocto(self.config.gas_tank) + yocto(self.config.min_stake) + milli(BIRTH_STORAGE_BUDGET_MILLI);
+        let seed = env::random_seed();
+        let start = env::sha256(&[seed.as_slice(), b"home"].concat())[0] % HOMES;
+        for step in 0..HOMES {
+            let home = (start + step) % HOMES;
+            let Some(last) = self.cats.get(&resident(home)).cloned() else { continue };
+            if last.alive || last.died_day.map(|d| d + 1 >= self.day).unwrap_or(true) {
+                continue;
+            }
+            if lives_used(home) >= LIVES_PER_HOME {
+                continue;
+            }
+            if nursery(home) + self.treasury < need_base {
+                continue;
+            }
+            self.birth(home, id, brain_key, &last, &seed);
+            return;
+        }
+    }
+
+    fn birth(&mut self, home: u8, id: u32, brain_key: PublicKey, last: &Cat, seed: &[u8]) {
+        self.cats.flush();
+        self.cat_by_account.flush();
+        let storage_before = env::storage_usage();
+        // Natural selection: the kitten's parent is the wealthiest living cat. If every cat is
+        // dead, the home's own last cat is the parent.
+        let parent = self
+            .cats
+            .values()
+            .filter(|c| c.alive)
+            .max_by_key(|c| (self.wealth(c), u32::MAX - c.id))
+            .cloned()
+            .unwrap_or_else(|| last.clone());
+        let pl = lineage_of(parent.id);
+        let genes = env::sha256(&[seed, b"genes", &id.to_le_bytes()].concat());
+        let (traits, mutations) = mutate_traits(&parent.traits, &genes);
+        let taken: Vec<String> = self.cats.values().filter(|c| c.alive).map(|c| c.name.clone()).collect();
+        let mut n = genes[31] as usize % KITTEN_NAMES.len();
+        for _ in 0..KITTEN_NAMES.len() {
+            if !taken.iter().any(|t| t == KITTEN_NAMES[n]) {
+                break;
+            }
+            n = (n + 1) % KITTEN_NAMES.len();
+        }
+        let name = KITTEN_NAMES[n].to_string();
+        let life = lives_used(home) + 1;
+        let lineage = Lineage { home, generation: pl.generation + 1, parent: Some(parent.id), life };
+
+        self.next_cat_id += 1;
+        let me = env::current_account_id();
+        let account_id: AccountId = format!("cat-{}.{}", id, me)
+            .parse()
+            .unwrap_or_else(|_| env::panic_str("Invalid cat account id"));
+        let cat = Cat {
+            id,
+            name: name.clone(),
+            account_id: account_id.clone(),
+            personality: parent.personality.clone(),
+            traits,
+            balance: U128(0),
+            stake: U128(0),
+            fish: self.config.starting_fish,
+            hunger: 0,
+            alive: true,
+            account_ready: false,
+            born_day: self.day,
+            died_day: None,
+            trades: 0,
+            claimed: U128(0),
+            last_words: String::new(),
+        };
+        self.cats.insert(id, cat);
+        self.cat_by_account.insert(account_id.clone(), id);
+        {
+            let mut lm: LookupMap<u32, Lineage> = LookupMap::new(StorageKey::Lineage);
+            lm.insert(id, lineage.clone());
+            let mut rm: LookupMap<u8, u32> = LookupMap::new(StorageKey::Residents);
+            rm.insert(home, id);
+            let mut um: LookupMap<u8, u8> = LookupMap::new(StorageKey::LivesUsed);
+            um.insert(home, life);
+            let mut l = listings();
+            l.insert(id.to_string(), U128(milli(ADOPTION_PRICE_MILLI)));
+        }
+
+        // The kitten NFT belongs to the nursery (this contract) until someone adopts it.
+        let token_metadata = TokenMetadata {
+            title: Some(format!("{} #{}", name, id)),
+            description: Some(format!(
+                "A kitten born in the {} (life {} of 9), child of {}. It inherited a {} personality with mutations.",
+                HOME_NAMES[home as usize], life, parent.name, parent.personality
+            )),
+            media: Some(format!("{}/api/cat/{}/image", self.media_base, id)),
+            media_hash: None,
+            copies: Some(1),
+            issued_at: Some(env::block_timestamp_ms().to_string()),
+            expires_at: None,
+            starts_at: None,
+            updated_at: None,
+            extra: Some(format!(
+                "{{\"account\":\"{}\",\"alive\":true,\"home\":{},\"generation\":{},\"parent\":{}}}",
+                account_id, home, lineage.generation, parent.id
+            )),
+            reference: None,
+            reference_hash: None,
+        };
+        self.tokens.internal_mint_with_refund(id.to_string(), me.clone(), Some(token_metadata), None);
+        near_contract_standards::non_fungible_token::events::NftMint {
+            owner_id: &me,
+            token_ids: &[&id.to_string()],
+            memo: Some("born in the alley"),
+        }
+        .emit();
+
+        // Pay for it: the home's nursery first (all of it goes to the kitten), then the treasury.
+        self.cats.flush();
+        self.cat_by_account.flush();
+        let storage_cost = env::storage_byte_cost().as_yoctonear() * (env::storage_usage() - storage_before) as u128;
+        let gas_tank = yocto(self.config.gas_tank);
+        let fixed = gas_tank + storage_cost;
+        let saved = nursery(home);
+        let min_stake = yocto(self.config.min_stake);
+        let from_treasury = (fixed + min_stake).saturating_sub(saved).min(self.treasury);
+        self.treasury -= from_treasury;
+        set_nursery(home, 0);
+        let stake = (saved + from_treasury).saturating_sub(fixed);
+        let mut cat = self.cats.get(&id).cloned().unwrap();
+        cat.balance = U128(stake);
+        cat.stake = U128(stake);
+        self.cats.insert(id, cat);
+
+        self.push_event("born", Some(id), Some(parent.id), None, home as u32, stake, None, mutations);
+
+        Promise::new(account_id)
+            .create_account()
+            .transfer(NearToken::from_yoctonear(gas_tank))
+            .add_access_key_allowance(brain_key, Allowance::Unlimited, me.clone(), CAT_KEY_METHODS)
+            .then(Self::ext(me).with_static_gas(GAS_FOR_CALLBACK).on_cat_account_created(id))
+            .detach();
     }
 
     fn set_last_words(&mut self, cat_id: u32, message: &str) {
