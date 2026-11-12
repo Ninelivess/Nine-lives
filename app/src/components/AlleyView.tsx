@@ -80,13 +80,12 @@ export function CatCard({ c, world, linked = true }: { c: CatInfo; world: WorldV
       </div>
       <div>
         <div className="cat-name"><b>{c.alive ? c.name : `Ghost of ${c.name}`}</b><span className={`pill pill-${status}`}>{status === "ghost" ? `day ${c.diedDay}` : status}</span></div>
-        <div className="cat-title">{p?.title ?? c.personality}</div>
+        <div className="cat-title">{p?.title ?? c.personality}{plots.length > 0 ? ` · ${plots.length} plot${plots.length > 1 ? "s" : ""}` : ""}</div>
         <div className="bars">
           <div className="bar-row" title="Nights left before starving"><Icon name="heart" /><PBar value={life} max={world.config.hungerLimit} color={life <= 1 ? "#d6455a" : "#e8665a"} /><span>{c.alive ? `${life}/3` : "—"}</span></div>
           <div className="bar-row" title="Fish in the bowl"><Icon name="fish" /><PBar value={c.fish} max={world.config.fishCap} color="#5aa0c8" /><span>{c.fish}{v && v.production > 0 ? `+${v.production}` : ""}</span></div>
           <div className="bar-row" title="Wallet in NEAR"><Icon name="coin" /><PBar value={c.balance} max={richest} color="#e8a33a" /><span>{(c.balance / 1000).toFixed(3)}</span></div>
         </div>
-        {plots.length > 0 && <div className="chips">{plots.map((x) => <span key={x.id} className="plot-chip">{x.name}</span>)}</div>}
         {c.lastWords && <div className="cat-quote">“{c.lastWords}”</div>}
       </div>
     </>
@@ -255,7 +254,7 @@ export function HowScreen({ world }: { world: WorldView | null }) {
             </div>
           ))}
         </div>
-        <div className="end-card pbox reveal d2" style={{ marginTop: 48 }}>
+        <div className="end-card end-gap pbox reveal d2" style={{ marginTop: 48 }}>
           <div>
             <h2>Watch them live.</h2>
             <p>{world ? `Day ${world.day} on NEAR testnet. ${world.cats.filter((c) => c.alive).length} alive, ${world.cats.filter((c) => !c.alive).length} ghosts.` : "Running on NEAR testnet."} Built at NEAR HACKATHON.</p>

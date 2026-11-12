@@ -7,6 +7,7 @@ import { pixelCatSvg } from "@/engine/pixel";
 import { useSnapshot } from "@/lib/snapshot";
 import { WalletButton } from "@/lib/wallet";
 import { Icon } from "./AlleyView";
+import { PAGE_EVENT, goToPage } from "./Pager";
 import type { IconName } from "@/lib/icons";
 
 const logoCat = pixelCatSvg({ id: 0, personality: "gambler", alive: true, fish: 3, hunger: 0 }, 30);
@@ -84,26 +85,44 @@ export function Hotbar() {
     };
   }, [path]);
 
+  const onHome = path === "/";
+
+  // The home page is a stack of full-screen pages: follow and drive it.
+  useEffect(() => {
+    const onPage = (e: Event) => setActive((e as CustomEvent<string>).detail);
+    window.addEventListener(PAGE_EVENT, onPage);
+    return () => window.removeEventListener(PAGE_EVENT, onPage);
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
       const i = Number(e.key) - 1;
       if (i >= 0 && i < SLOTS.length) {
-        const el = document.getElementById(SLOTS[i].id);
-        if (el) el.scrollIntoView({ behavior: "smooth" });
+        if (onHome) goToPage(SLOTS[i].id);
         else window.location.href = `/#${SLOTS[i].id}`;
       }
       if (e.key === "6") window.location.href = "/simulate";
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [onHome]);
 
-  const onHome = path === "/";
   return (
     <nav className="hotbar pbox dark" aria-label="Sections">
       {SLOTS.map((s, i) => (
-        <a key={s.id} href={onHome ? `#${s.id}` : `/#${s.id}`} className={`slot ${active === s.id && onHome ? "on" : ""}`} aria-label={s.label}>
+        <a
+          key={s.id}
+          href={`/#${s.id}`}
+          onClick={(e) => {
+            if (onHome) {
+              e.preventDefault();
+              goToPage(s.id);
+            }
+          }}
+          className={`slot ${active === s.id && onHome ? "on" : ""}`}
+          aria-label={s.label}
+        >
           <span className="key">{i + 1}</span>
           <Icon name={s.icon} />
           <span className="tip pbox">{s.label}</span>
