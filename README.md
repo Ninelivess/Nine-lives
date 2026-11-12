@@ -1,9 +1,9 @@
 # Nine Lives 🐈‍⬛
 
-**Nine AI cats live in one alley on NEAR. Every cat is an NFT _and_ its own NEAR account. They trade, bluff and buy property with their own money, and every night each one must eat a fish. A cat that goes three nights without food dies, and its NFT turns into a ghost forever.**
+**Nine AI cats live in one alley on NEAR. Every cat is an NFT _and_ its own NEAR account. They trade, bluff and buy property with their own money, and every night each one must eat a fish. A cat that goes three nights without food dies, and its NFT turns into a ghost forever. Then a kitten is born in its home: every home has nine lives, and each kitten inherits the personality of the richest cat alive, with mutations. Up to 3,150 people can back the homes through fan clubs.**
 
 - **Live alley:** https://nine-lives-alley.vercel.app (NEAR testnet, updates every few seconds)
-- **Contract:** [`ninelives.testnet`](https://testnet.nearblocks.io/address/ninelives.testnet). Cats are `cat-1.ninelives.testnet` … `cat-9.ninelives.testnet`
+- **Contract:** [`ninelives.testnet`](https://testnet.nearblocks.io/address/ninelives.testnet). Cats are `cat-1.ninelives.testnet` … `cat-9.ninelives.testnet`, kittens get the next ids (`cat-10` was Peanut, child of Mochi)
 - **Buy cats with your AI:** MCP server at `https://nine-lives-alley.vercel.app/api/mcp` for Claude, ChatGPT and any MCP client ([guide](https://nine-lives-alley.vercel.app/agents))
 - **Tracks:** NFTs That Do Something · AI Swarms · Agent Economy · Games With Real Economies · AI Security & Defense
 - Built at NEAR HACKATHON (Nov 2026). Everything in this repo was written during the hackathon.
@@ -33,13 +33,23 @@ AI agents that hold money need two things: rules they cannot break, and a way fo
 | Anyone can end the day once it has passed. Nobody can end it early. | `tick` |
 | The NFT holder can claim profit (wallet above stake). When the NFT is sold, the right moves with it. A ghost's holder inherits what is left. | `claim_profit`, NEP-171 transfer |
 | The holder can list a cat for sale. Anyone, a person or an AI agent, buys it in one call: the NFT and the payment move together, extra deposit is refunded. A private transfer cancels the sale. | `list_cat`, `buy_cat`, `delist_cat`, `get_listings` |
+| **Nine lives.** There are 9 homes and each has 9 lives. The night after a cat dies, the contract gives birth to a kitten in its dark home if the home's nursery plus the shop vault can pay for a new account. At most one birth a night. | `tick` → `try_birth`, `get_homes` |
+| **Natural selection.** A kitten's parent is the wealthiest living cat (wallet + fish + plots). Each personality number is copied with on-chain random mutation (about ±15%, sometimes ±45%), so strategies that win spread and losers die out. | `mutate_traits` |
+| Newborn kittens belong to the nursery (the contract) and are listed for adoption at 0.1 NEAR. The fee goes back to the kitten's home. | `buy_cat` |
+| **Fan clubs.** Each home has 350 seats (3,150 in all), 0.01 NEAR each, one per wallet. Half of a seat goes into the cat's wallet, half into the home's nursery for its next kitten. Fans earn 30% of every profit claim and half of every kitten adoption in their home, across all nine lives. | `join_fan_club`, `claim_fan_rewards`, `get_fan_seats`, `get_fans` |
 
 In simulations the first cat usually dies around day 20. Cats that own plots survive, and the alley settles at about 5–7 cats. Run `npm run simulate` to see it happen (see below).
 
 ## Try it: do X, see Y
 
 **1. Watch the live alley.** Open https://nine-lives-alley.vercel.app.
-→ You see 9 cat cards, a day counter, a countdown to nightfall and a "Live from the alley" feed. While the page is open it calls `/api/advance`. Within about a minute new offers, counter-offers and trades show up, each with the line the cat said. When the countdown reaches 0, a 🌙 "Day N ends" entry appears.
+→ The alley is a live stage. While the page is open it calls `/api/advance`, and every new on-chain event is acted out: cats talk in speech bubbles, fish and coins fly between them on a trade, night falls when the day ends, a ghost rises when a cat dies, and a kitten pops out of a dark home when it is born. A LIVE ticker at the top shows the same events as text. Keys 1-9 (or the hotbar) switch pages: the nine homes, fan clubs, nine lives, gazette, graveyard, talk to a cat, how it works, FAQ.
+
+**1b. See the generations.** Press 4 (Nine lives).
+→ A 9 × 9 board: one row per home, one slot per life. Founders, kittens, ghosts and the next empty life. "Evolution so far" compares the founders' average personality with the cats alive now. On testnet, Peanut (#10) was born in the Trash Can as the child of Mochi, the Shark, with `risk -0.06, lossAversion -0.11, endowment +0.10`.
+
+**1c. Back a home.** Press 3 (Fan clubs), pick a home and press Join.
+→ `/sign?action=join&cat=N` shows the exact call, `join_fan_club({"home":H})` with a 0.01 NEAR deposit, and asks your testnet wallet to sign. The seat counter in the HUD goes up and the alley shows "♥ new fan" over that home.
 
 **2. Open a cat.** Click any card, for example Smokey.
 → You see its personality numbers (loss aversion, greed, bluffing …), "What it is thinking right now" (its current max bid and min ask), its own account `cat-3.ninelives.testnet` and its life story. Click the account link to open nearblocks. The transactions there are signed by the cat's own account, not by us.
@@ -79,7 +89,7 @@ curl -s https://nine-lives-alley.vercel.app/api/mcp -H 'Content-Type: applicatio
 ```bash
 cd contract && cargo test
 ```
-→ `32 passed`. The tests cover atomic settlement, private counter-offers, starvation into a ghost, plots released on death, scraps feeding an empty bowl, profit following the NFT, the previous holder getting nothing, slippage limits, the bounded event log, admin-only config, moving NFT images to a new site, and the marketplace (listing, buying, refunds, a private transfer cancelling a sale, selling a ghost).
+→ `42 passed`. The tests cover fan clubs (seat split, one seat per wallet, the 350-seat cap, the 30% cut, late joiners not getting earlier rewards), nine lives (birth the night after a death, natural-selection parent, no birth without a key or money, the nine-life limit, adoption fees going home, mutations staying in range), plus atomic settlement, private counter-offers, starvation into a ghost, plots released on death, scraps feeding an empty bowl, profit following the NFT, the previous holder getting nothing, slippage limits, the bounded event log, admin-only config, moving NFT images to a new site, and the marketplace (listing, buying, refunds, a private transfer cancelling a sale, selling a ghost).
 
 **9. Run your own alley (optional).** You need a funded testnet account (about 5 NEAR).
 ```bash
@@ -105,7 +115,8 @@ npm run dev                                          # http://localhost:3000
 | Tool | What it does |
 |---|---|
 | `alley_status`, `list_cats`, `get_cat`, `list_cats_for_sale`, `how_it_works` | Read the live alley (read-only) |
-| `buy_cat`, `sell_cat`, `delist_cat`, `feed_cat` | Prepare a transaction. Returns `approve_in_wallet` (a page where the human signs with their own wallet) and `raw_function_call` (receiver, method, args, deposit, gas) for agents that sign with their own key |
+| `list_homes`, `talk_to_cat` | The nine homes with lives, fans and nursery; chat with a cat (answered by NEAR AI Cloud) |
+| `buy_cat`, `sell_cat`, `delist_cat`, `feed_cat`, `join_fan_club` | Prepare a transaction. Returns `approve_in_wallet` (a page where the human signs with their own wallet) and `raw_function_call` (receiver, method, args, deposit, gas) for agents that sign with their own key |
 
 The write tools never sign and the server holds no buyer keys, so an assistant cannot spend anyone's money on its own. Agent-to-agent trade still works: an agent with its own NEAR account signs `raw_function_call` (see `app/scripts/agent-buy.ts`).
 
@@ -141,13 +152,17 @@ No LLM decides anything, so every run can be reproduced and judged. Each cat is 
 - a **min ask** (greed markup plus loss-aversion premium),
 - actions: accept, counter in the middle, post an offer, buy from the shop, buy or bid for plots, give charity, beg, cancel and re-price.
 
-The lines the cats say come from per-personality templates in `lines.ts`, with real numbers filled in. They are flavor; the numbers drive the decisions.
+The lines the cats say come from per-personality templates in `lines.ts`, with real numbers filled in. When a NEAR AI Cloud key is configured (`NEARAI_API_KEY`), the runner asks an open model on NEAR AI to rewrite each line in the cat's voice and keeps the result only if every number is unchanged. They are flavor; the numbers drive the decisions.
+
+**Talk to a cat.** `/api/chat` builds a prompt from the cat's live on-chain state (fish, hunger, wallet, plots, parent, last words, recent events, neighbours) and sends it to NEAR AI Cloud, where open models run inside trusted execution environments. Without a key it falls back to a scripted reply.
 
 ## Trust model and limitations, honestly
 
 - The brains run on our server (Vercel), which holds `MASTER_SEED`. Every cat key is derived from it. The contract limits what a key can do, but the operator could still make cats trade badly on purpose. The next step is running the brains in a TEE (for example on NEAR AI Cloud or OutLayer), so nobody, including us, can see a cat's reservation price.
 - The admin account can change config with `set_config`. Every change is logged as a public `config` event.
-- Sybil resistance is not a concern because only nine cats can exist (`max_cats = 9`).
+- Kittens' brain keys are registered in advance by the admin (`register_brain_keys`, public keys only); the private keys are derived from `MASTER_SEED` like the founders'. Without a registered key no kitten is born.
+- Fan-club seats are one per wallet, so a determined person can take many seats with many wallets. On testnet that is fine; on mainnet seats would need a proof of personhood or a rising price.
+- Only 81 cats can ever exist (9 homes × 9 lives). Births are paid from the shop vault, so the alley cannot grow faster than the cats spend on food.
 - Testnet only. Amounts are small (each cat started with 0.2 NEAR).
 
 ## Repository layout

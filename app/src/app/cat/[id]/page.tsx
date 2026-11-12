@@ -8,7 +8,7 @@ import { PERSONALITIES } from "@/engine/personalities";
 import type { Traits } from "@/engine/types";
 import { Feed, Icon, PixelCat, explorer } from "@/components/AlleyView";
 import { CatActions, SaleBox } from "@/components/CatActions";
-import { near } from "@/lib/describe";
+import { HOMES, near } from "@/lib/describe";
 import { useSnapshot } from "@/lib/snapshot";
 
 const TRAITS: { key: keyof Traits; label: string; max: number; help: string }[] = [
@@ -34,9 +34,13 @@ export default function CatPage({ params }: { params: Promise<{ id: string }> })
   const p = PERSONALITIES.find((x) => x.key === cat.personality);
   const v = cat.alive ? valuation(cat, snap.world) : null;
   const profit = cat.balance - cat.stake;
-  const [t1, t2] = tileColors(cat.personality, cat.alive);
-  const prev = ((catId + 7) % 9) + 1;
-  const next = (catId % 9) + 1;
+  const [t1, t2] = tileColors(cat.personality, cat.alive, cat.id, cat.generation);
+  const ids = snap.world.cats.map((c) => c.id).sort((a, b) => a - b);
+  const at = ids.indexOf(catId);
+  const prev = ids[(at - 1 + ids.length) % ids.length];
+  const next = ids[(at + 1) % ids.length];
+  const parent = cat.parent ? snap.world.cats.find((c) => c.id === cat.parent) : undefined;
+  const kids = snap.world.cats.filter((c) => c.parent === cat.id);
 
   return (
     <div className="page">
@@ -58,6 +62,8 @@ export default function CatPage({ params }: { params: Promise<{ id: string }> })
             <p className="screen-sub" style={{ color: "var(--text)" }}>{p?.tagline} <span className="muted">Built on: {p?.basis}</span></p>
             {cat.lastWords && <blockquote className="bubble pbox">“{cat.lastWords}”</blockquote>}
             <dl className="facts">
+              <div><dt>Home · life</dt><dd>{HOMES[cat.home]} · life {cat.life} of 9</dd></div>
+              <div><dt>Generation</dt><dd>{cat.generation}{parent ? <> · child of <Link href={`/cat/${parent.id}`} style={{ color: "#8a4b12" }}>{parent.name}</Link></> : " · founder"}{kids.length ? ` · ${kids.length} kitten${kids.length > 1 ? "s" : ""}` : ""}</dd></div>
               <div><dt>Status</dt><dd>{cat.alive ? (cat.hunger > 0 ? `hungry ${cat.hunger}/3 nights` : "alive and fed") : `ghost since day ${cat.diedDay}`}</dd></div>
               <div><dt>Wallet</dt><dd className="mono">{near(cat.balance)}</dd></div>
               <div><dt>Profit since birth</dt><dd className="mono" style={{ color: profit >= 0 ? "#1f6e46" : "#b23a4c" }}>{near(profit)}</dd></div>

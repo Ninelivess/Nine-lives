@@ -2,7 +2,7 @@
 // economy in seconds, tune parameters and let judges watch the economy without a wallet.
 // If you change a rule in the contract, change it here too.
 
-import type { Action, CatInfo, GameConfig, GameEvent, OfferInfo, PlotInfo, WorldView } from "./types";
+import type { Action, CatInfo, GameConfig, GameEvent, OfferInfo, PlotInfo, Traits, WorldView } from "./types";
 import { PERSONALITIES } from "./personalities";
 
 export const DEFAULT_CONFIG: GameConfig = {
@@ -271,7 +271,67 @@ export class SimWorld {
     this.day++;
     const alive = this.cats.filter((c) => c.alive).length;
     this.event("tick", null, null, null, ate, this.fishPrice, null, `Day ${day} ends. ${ate} cats ate, ${alive} alive.`);
+    this.birth(rand);
   }
+
+  /** Same rule as the contract: at most one kitten a night, in a home dark since before last night. */
+  private birth(rand: () => number): void {
+    const cost = this.config.gasTank + this.config.minStake + 20;
+    const start = Math.floor(rand() * 9);
+    for (let step = 0; step < 9; step++) {
+      const home = (start + step) % 9;
+      const mine = this.cats.filter((c) => c.home === home);
+      const last = mine.reduce<CatInfo | null>((a, c) => (!a || c.id > a.id ? c : a), null);
+      if (!last || last.alive || last.diedDay === null || last.diedDay + 1 >= this.day) continue;
+      if (mine.length >= 9 || this.treasury < cost) continue;
+      const living = this.cats.filter((c) => c.alive);
+      const wealth = (c: CatInfo) => c.balance + c.fish * this.fishPrice + this.plots.filter((p) => p.owner === c.id).length * this.config.plotBasePrice;
+      const parent = living.length ? living.reduce((a, c) => (wealth(c) > wealth(a) ? c : a)) : last;
+      const { traits, changes } = mutateTraits(parent.traits, rand);
+      const taken = new Set(living.map((c) => c.name));
+      let n = Math.floor(rand() * KITTEN_NAMES.length);
+      for (let i = 0; i < KITTEN_NAMES.length && taken.has(KITTEN_NAMES[n]); i++) n = (n + 1) % KITTEN_NAMES.length;
+      const id = this.cats.length + 1;
+      const stake = this.config.minStake;
+      this.treasury -= cost;
+      this.cats.push({
+        id, name: KITTEN_NAMES[n], accountId: `cat-${id}.ninelives.sim`, personality: parent.personality, traits,
+        balance: stake, stake, fish: this.config.startingFish, hunger: 0, alive: true, accountReady: true,
+        bornDay: this.day, diedDay: null, trades: 0, claimed: 0, lastWords: "", ownerId: "nursery", plots: [],
+        gasBalance: this.config.gasTank, home, generation: parent.generation + 1, parent: parent.id, life: mine.length + 1,
+      });
+      this.event("born", id, parent.id, null, home, stake, null, changes);
+      return;
+    }
+  }
+}
+
+export const KITTEN_NAMES = [
+  "Miso", "Tofu", "Pepper", "Ginger", "Olive", "Pudding", "Bean", "Sushi", "Waffle", "Nugget", "Boba", "Clover", "Pixel", "Simit",
+  "Lokum", "Peanut", "Mango", "Bubbles", "Socks", "Cookie", "Zeytin", "Pumpkin", "Mocha", "Tiny", "Kiwi", "Pesto", "Tarcin",
+];
+
+const RANGES: Partial<Record<keyof Traits, [number, number, boolean]>> = {
+  lossAversion: [0.5, 3.5, false], endowment: [0.5, 3, false], safetyStock: [0, 8, true], activity: [0.2, 1, false],
+};
+
+/** JS twin of `mutate_traits` in the contract: about +-15% per trait, ~10% chance of a big jump. */
+export function mutateTraits(parent: Traits, rand: () => number): { traits: Traits; changes: string } {
+  const out = { ...parent };
+  const changes: string[] = [];
+  for (const k of Object.keys(parent) as (keyof Traits)[]) {
+    const v = parent[k];
+    const [lo, hi, int] = RANGES[k] ?? [0, 1, false];
+    const spread = rand() < 0.1 ? 0.45 : 0.15;
+    const b = rand();
+    let nv = int ? v + Math.floor(b * 3) - 1 : v === 0 ? 0.05 * b : v * (1 + (b * 2 - 1) * spread);
+    nv = Math.min(hi, Math.max(lo, nv));
+    if (!int) nv = Math.round(nv * 100) / 100;
+    const d = nv - v;
+    if (Math.abs(d) >= 0.05 || (int && d !== 0)) changes.push(`${String(k)} ${d > 0 ? "+" : ""}${int ? d : d.toFixed(2)}`);
+    out[k] = nv;
+  }
+  return { traits: out, changes: changes.join(", ") };
 }
 
 /** Small deterministic PRNG so every simulation run can be reproduced from its seed. */
