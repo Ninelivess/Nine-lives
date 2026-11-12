@@ -12,6 +12,22 @@ export function explorer(network: string | undefined, account: string): string {
   return `https://${network === "mainnet" ? "" : "testnet."}nearblocks.io/address/${account}`;
 }
 
+const ICONS: Record<string, string> = {
+  fish: '<svg viewBox="0 0 9 5" shape-rendering="crispEdges"><rect x="0" y="1" width="6" height="3" fill="#7fc3e8"/><rect x="6" y="0" width="2" height="5" fill="#5aa0c8"/><rect x="1" y="2" width="1" height="1" fill="#06070d"/></svg>',
+  coin: '<svg viewBox="0 0 7 7" shape-rendering="crispEdges"><rect x="2" y="0" width="3" height="7" fill="#ffd27a"/><rect x="0" y="2" width="7" height="3" fill="#ffd27a"/><rect x="1" y="1" width="5" height="5" fill="#ffd27a"/><rect x="3" y="2" width="1" height="3" fill="#a87a1e"/></svg>',
+  up: '<svg viewBox="0 0 5 5" shape-rendering="crispEdges"><rect x="2" y="0" width="1" height="1" fill="#00ec97"/><rect x="1" y="1" width="3" height="1" fill="#00ec97"/><rect x="0" y="2" width="5" height="1" fill="#00ec97"/><rect x="2" y="3" width="1" height="2" fill="#00ec97"/></svg>',
+  down: '<svg viewBox="0 0 5 5" shape-rendering="crispEdges"><rect x="2" y="0" width="1" height="2" fill="#ff5c7a"/><rect x="0" y="2" width="5" height="1" fill="#ff5c7a"/><rect x="1" y="3" width="3" height="1" fill="#ff5c7a"/><rect x="2" y="4" width="1" height="1" fill="#ff5c7a"/></svg>',
+};
+
+export function Icon({ name }: { name: keyof typeof ICONS }) {
+  return <span className="ico-px" style={{ display: "inline-block", width: 11, height: 11, lineHeight: 0 }} dangerouslySetInnerHTML={{ __html: ICONS[name] }} />;
+}
+
+const KIND: Record<string, string> = {
+  trade: "Trade", offer: "Offer", counter: "Counter", shop: "Shop", plot: "Plot", say: "Says", hungry: "Hungry", death: "Death",
+  catch: "Luck", scraps: "Scraps", rot: "Rot", refuel: "Gas", claim: "Claim", feed: "Fed", tick: "Night", adopt: "Born", cancel: "Cancel", config: "Rules",
+};
+
 export function PixelCat({ c, size, bg = false }: { c: Pick<CatInfo, "id" | "personality" | "alive" | "fish" | "hunger">; size: number; bg?: boolean }) {
   return (
     <span
@@ -78,14 +94,22 @@ export function Ticker({ events, world }: { events: GameEvent[]; world: WorldVie
     .filter((e) => ["trade", "death", "hungry", "plot", "shop", "catch", "scraps", "tick"].includes(e.kind))
     .slice(0, 14)
     .map((e) => describe(e, cats, world.plots));
-  if (!items.length) items.push({ icon: "🐈", text: "Nine cats wake up in the alley", tone: "info" });
+  const kinds = [...events].reverse().filter((e) => ["trade", "death", "hungry", "plot", "shop", "catch", "scraps", "tick"].includes(e.kind)).slice(0, 14).map((e) => e.kind);
+  if (!items.length) {
+    items.push({ icon: "", text: "Nine cats wake up in the alley", tone: "info" });
+    kinds.push("adopt");
+  }
   const loop = [...items, ...items];
+  const tone: Record<string, string> = { trade: "var(--green)", death: "var(--ghost)", hungry: "var(--red)", tick: "var(--warm)" };
   return (
     <div className="ticker" aria-hidden>
       <div className="ticker-track">
-        {loop.map((d, i) => (
-          <span key={i} className="ticker-item">{d.icon} {d.text}</span>
-        ))}
+        {loop.map((d, i) => {
+          const k = kinds[i % kinds.length];
+          return (
+            <span key={i} className="ticker-item"><span className="k" style={{ color: tone[k] ?? "var(--muted)" }}>{KIND[k] ?? k}</span> {d.text}</span>
+          );
+        })}
       </div>
     </div>
   );
@@ -109,16 +133,16 @@ function CatCard({ c, world, mode }: { c: CatInfo; world: WorldView; mode: "live
       </div>
       <div className="cat-body">
         <div>
-          <div className="cat-name"><b>{c.alive ? c.name : `👻 ${c.name}`}</b></div>
+          <div className="cat-name"><b>{c.alive ? c.name : `Ghost of ${c.name}`}</b></div>
           <div className="cat-title">{p?.title ?? c.personality}</div>
         </div>
         <div className="chips">
-          <span className="chip" title="Fish in the bowl">🐟 {c.fish}{v && v.production > 0 ? ` +${v.production}/d` : ""}</span>
-          <span className="chip" title="Game wallet">Ⓝ {(c.balance / 1000).toFixed(3)}</span>
-          <span className={`chip ${profit >= 0 ? "pos" : "neg"}`} title="Profit since birth">{profit >= 0 ? "▲" : "▼"} {(Math.abs(profit) / 1000).toFixed(3)}</span>
+          <span className="chip" title="Fish in the bowl"><Icon name="fish" /> {c.fish}{v && v.production > 0 ? ` +${v.production}/d` : ""}</span>
+          <span className="chip" title="Game wallet, NEAR"><Icon name="coin" /> {(c.balance / 1000).toFixed(3)}</span>
+          <span className={`chip ${profit >= 0 ? "pos" : "neg"}`} title="Profit since birth, NEAR"><Icon name={profit >= 0 ? "up" : "down"} /> {(Math.abs(profit) / 1000).toFixed(3)}</span>
         </div>
         {plots.length > 0 && (
-          <div className="chips">{plots.map((x) => <span key={x.id} className="plot-chip">📦 {x.name} +{x.fishPerDay}</span>)}</div>
+          <div className="chips">{plots.map((x) => <span key={x.id} className="plot-chip">{x.name} +{x.fishPerDay}</span>)}</div>
         )}
         {c.alive && c.hunger > 0 && (
           <div className="hunger" title="Hungry nights (3 = death)">
@@ -148,7 +172,7 @@ export function Feed({ events, world, title }: { events: GameEvent[]; world: Wor
         const d = describe(e, cats, world.plots);
         return (
           <li key={e.id} className={`feed-item tone-${d.tone}`}>
-            <span className="feed-icon" aria-hidden>{d.icon}</span>
+            <span className="feed-kind">{KIND[e.kind] ?? e.kind}</span>
             <div>
               <div className="feed-text">{d.text}</div>
               {d.quote && <div className="feed-quote">“{d.quote}”</div>}
@@ -176,7 +200,7 @@ export function SectionHead({ num, title, sub, right }: { num: string; title: st
   return (
     <div className="section-head">
       <div>
-        <p className="section-num">{num}</p>
+        <p className="section-num"><span className="bracket">{num}</span></p>
         <h2 className="section-title">{title}</h2>
         {sub && <p className="section-sub">{sub}</p>}
       </div>
@@ -191,8 +215,8 @@ export function AlleySection({ world, events, mode }: { world: WorldView; events
   return (
     <section className="section" id="alley">
       <SectionHead
-        num="01 — The alley"
-        title="Who is still alive"
+        num="01 · The alley"
+        title="Who is still alive."
         sub="Every card is an NFT with its own NEAR account. Click a cat to see what it is thinking."
       />
       <div className="alley-grid">
@@ -211,7 +235,7 @@ export function MarketSection({ world }: { world: WorldView }) {
   const offers = [...world.offers].sort((a, b) => b.id - a.id);
   return (
     <section className="section" id="market">
-      <SectionHead num="02 — The market" title="Fish, plots, bluffs" sub="Offers and counter-offers between cats. Settlement is atomic on-chain: money and goods move in one step." />
+      <SectionHead num="02 · The market" title="Fish, plots and bluffs." sub="Offers and counter-offers between cats. Settlement is atomic on-chain: money and goods move in one step." />
       <div className="market">
         <div className="panel">
           <h3>Open offers ({offers.length})</h3>
@@ -241,15 +265,15 @@ export function MarketSection({ world }: { world: WorldView }) {
           <div className="plots-grid">
             {world.plots.map((p) => (
               <div key={p.id} className={`plot-card ${p.owner === null ? "free" : ""}`}>
-                <span className="pname">📦 {p.name}</span>
-                <span className="yield">+{p.fishPerDay} 🐟 / day</span>
+                <span className="pname">{p.name}</span>
+                <span className="yield">+{p.fishPerDay} fish / day</span>
                 <span className="owner">{p.owner === null ? `For sale · ${near(world.config.plotBasePrice)}` : `Owned by ${name(p.owner)}`}</span>
               </div>
             ))}
           </div>
           <div className="shop-row">
-            <span className="chip">🐟 Shop price {near(world.fishPrice)}</span>
-            <span className="chip">🔒 Vault {near(world.treasury, 2)}</span>
+            <span className="chip"><Icon name="fish" /> Shop price {near(world.fishPrice)}</span>
+            <span className="chip"><Icon name="coin" /> Locked in vault {near(world.treasury, 2)}</span>
           </div>
         </div>
       </div>
@@ -261,7 +285,7 @@ export function GraveyardSection({ world, mode }: { world: WorldView; mode: "liv
   const ghosts = world.cats.filter((c) => !c.alive).sort((a, b) => (a.diedDay ?? 0) - (b.diedDay ?? 0));
   return (
     <section className="section" id="graveyard">
-      <SectionHead num="03 — The graveyard" title="Ghosts forever" sub="Three hungry nights and a cat dies. Its NFT is renamed “Ghost of …” and its picture turns into a ghost. Nobody can bring it back." />
+      <SectionHead num="03 · The graveyard" title="Ghosts, forever." sub="Three hungry nights and a cat dies. Its NFT is renamed “Ghost of …” and its picture turns into a ghost. Nobody can bring it back." />
       {ghosts.length === 0 ? (
         <div className="empty-graves">
           <span className="tomb" />
@@ -294,14 +318,14 @@ export function GraveyardSection({ world, mode }: { world: WorldView; mode: "liv
 
 export function HowSection() {
   const cards = [
-    { ico: "🪪", t: "Each NFT is an account", d: "Every cat owns cat-<id>.ninelives.testnet. Its only key can call 7 game methods. It can never move NEAR out." },
-    { ico: "🧠", t: "Brains with personalities", d: "Loss aversion, herding, bluffing, present bias: nine sets of numbers decide every price. No LLM, fully reproducible." },
-    { ico: "🌙", t: "Eat or become a ghost", d: "Every night each cat eats a fish. Three hungry nights and the NFT turns into a ghost, on-chain, forever." },
-    { ico: "🍽️", t: "Keep one alive", d: "Anyone can feed a cat from a wallet. The NFT holder can claim its profit. Take too much and it starves." },
+    { ico: "01", t: "Each NFT is an account", d: "Every cat owns cat-<id>.ninelives.testnet. Its only key can call 7 game methods. It can never move NEAR out." },
+    { ico: "02", t: "Brains with personalities", d: "Loss aversion, herding, bluffing, present bias: nine sets of numbers decide every price. No LLM, fully reproducible." },
+    { ico: "03", t: "Eat or become a ghost", d: "Every night each cat eats a fish. Three hungry nights and the NFT turns into a ghost, on-chain, forever." },
+    { ico: "04", t: "Keep one alive", d: "Anyone can feed a cat from a wallet. The NFT holder can claim its profit. Take too much and it starves." },
   ];
   return (
     <section className="section" id="how">
-      <SectionHead num="04 — How it works" title="Nobody is in charge" right={<Link className="btn" href="/how">Read the rules →</Link>} />
+      <SectionHead num="04 · How it works" title="Nobody is in charge." right={<Link className="btn" href="/how"><span className="btn-num">→</span> Read the rules</Link>} />
       <div className="how-grid">
         {cards.map((c) => (
           <div key={c.t} className="how-card">

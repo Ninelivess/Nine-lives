@@ -75,7 +75,7 @@ export default function CatPage({ params }: { params: Promise<{ id: string }> })
           <dl className="facts">
             <div><dt>Wallet</dt><dd className="mono">{near(cat.balance)}</dd></div>
             <div><dt>Profit since birth</dt><dd className={`mono ${profit >= 0 ? "pos" : "neg"}`}>{near(profit)}</dd></div>
-            <div><dt>Fish</dt><dd className="mono">{cat.fish} 🐟</dd></div>
+            <div><dt>Fish</dt><dd className="mono">{cat.fish}</dd></div>
             <div><dt>Trades</dt><dd className="mono">{cat.trades}</dd></div>
             <div><dt>Own NEAR account</dt><dd><a href={explorer(snap.network, cat.accountId)} target="_blank" rel="noreferrer">{cat.accountId}</a></dd></div>
             <div><dt>Gas left on it</dt><dd className="mono">{cat.gasBalance !== undefined ? near(cat.gasBalance) : "—"}</dd></div>

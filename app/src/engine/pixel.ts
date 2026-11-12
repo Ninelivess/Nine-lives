@@ -7,6 +7,8 @@ export interface PixelInput {
   alive: boolean;
   fish: number;
   hunger: number;
+  /** Eyes closed (the cat is asleep in its home). */
+  sleeping?: boolean;
 }
 
 // Legend: . empty, O outline, F fur, S shade, L light (muzzle, belly, paws), P pink (ears, nose),
@@ -226,6 +228,10 @@ export function pixelGrid(c: PixelInput): { grid: string[][]; pal: Palette } {
   if (c.alive) put(tail());
   if (c.alive) put(accessory(c.personality));
   if (c.alive && c.hunger > 0) put(hungryOverlay());
+  if (c.alive && c.sleeping && c.personality !== "shark") {
+    for (const col of [7, 8, 23, 24]) put([[12, col, "F"], [13, col, "K"], [14, col, "F"]]);
+    put([[12, 6, "F"], [13, 6, "F"], [12, 25, "F"], [13, 25, "F"]]);
+  }
   if (!c.alive) {
     put(ghostOverlay());
     ghostBottom(grid);
@@ -237,6 +243,24 @@ function color(pal: Palette, v: string): string | null {
   if (v === ".") return null;
   if (v.startsWith("#")) return v;
   return (pal as unknown as Record<string, string>)[v] ?? null;
+}
+
+/** The cat's pixels (and halo) in a 32x32 box, without an <svg> wrapper, for embedding in a scene. */
+export function pixelCatInner(c: PixelInput): string {
+  const { grid, pal } = pixelGrid(c);
+  const rects: string[] = [];
+  for (let r = 0; r < 32; r++) {
+    let c0 = 0;
+    while (c0 < 32) {
+      const col = color(pal, grid[r][c0]);
+      let c1 = c0 + 1;
+      while (c1 < 32 && color(pal, grid[r][c1]) === col) c1++;
+      if (col) rects.push(`<rect x="${c0}" y="${r}" width="${c1 - c0}" height="1" fill="${col}"/>`);
+      c0 = c1;
+    }
+  }
+  const halo = c.alive ? "" : `<g fill="#ffd23f"><rect x="10" y="0" width="12" height="1"/><rect x="9" y="1" width="1" height="1"/><rect x="22" y="1" width="1" height="1"/><rect x="10" y="2" width="12" height="1"/></g>`;
+  return rects.join("") + halo;
 }
 
 /**

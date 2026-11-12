@@ -39,14 +39,14 @@ export default function SimulatePage() {
         <div className="container">
           <div className="hero-grid">
             <div>
-              <p className="eyebrow">Offline simulation · no wallet needed</p>
+              <p className="eyebrow"><span className="bracket">Offline simulation · no wallet needed</span></p>
               <h1 className="hero-title">Fast-<span className="hl">forward</span><br />a month.</h1>
               <p className="hero-lede">
                 Same cat brains, same rules as the contract (mirrored in <code>world.ts</code>), one day every {speed / 1000}s. Each seed replays
                 exactly, so you can rerun any story. Seed 7: watch Smokey around day 19.
               </p>
               <div className="controls">
-                <button className="btn-primary" onClick={() => setPlaying((p) => !p)}>{playing ? "❚❚ Pause" : "▶ Play"}</button>
+                <button className="btn-primary" onClick={() => setPlaying((p) => !p)}>{playing ? "Pause" : "Play"}</button>
                 <button onClick={() => { simDay(w, randRef.current); setVersion((v) => v + 1); }} disabled={playing}>Step a day</button>
                 <label>
                   Speed
