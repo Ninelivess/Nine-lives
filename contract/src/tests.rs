@@ -39,7 +39,9 @@ fn ctx(predecessor: AccountId, deposit: u128, now_ms: u64) {
 
 fn setup(cats: u32) -> NineLives {
     ctx(admin(), 0, 1_000);
-    let mut c = NineLives::new(admin(), "https://ninelives.example".into(), None);
+    // Luck is switched off so hunger timings are exact; `night_hunt_uses_luck` tests it.
+    let config = Config { catch_chance_pct: 0, ..Default::default() };
+    let mut c = NineLives::new(admin(), "https://ninelives.example".into(), Some(config));
     for i in 0..cats {
         ctx(admin(), near(500), 1_000);
         c.adopt(
@@ -72,9 +74,9 @@ fn adopt_mints_nft_and_sets_stake() {
     assert_eq!(v.owner_id, Some(alice()));
     assert_eq!(v.cat.fish, 3);
     assert!(v.cat.alive);
-    // stake = deposit - gas tank - storage, so a bit under 0.4 NEAR
+    // stake = deposit - gas tank - storage, so a bit under 0.45 NEAR
     let stake = v.cat.stake.0;
-    assert!(stake < near(400) && stake > near(390), "stake {}", stake);
+    assert!(stake < near(450) && stake > near(440), "stake {}", stake);
     assert_eq!(v.cat.balance.0, stake);
     assert_eq!(c.nft_token("1".into()).unwrap().owner_id, alice());
 }
@@ -183,7 +185,7 @@ fn shop_price_rises_with_demand_and_cools_down() {
 fn shop_respects_slippage_limit() {
     let mut c = setup(1);
     ctx(cat_acc(1), 0, 2_000);
-    c.buy_fish(2, U128(near(10)), None);
+    c.buy_fish(2, U128(near(5)), None);
 }
 
 #[test]
@@ -240,16 +242,16 @@ fn ghosts_cannot_act() {
 fn ghost_releases_its_plot() {
     let mut c = setup(1);
     ctx(cat_acc(1), 0, 2_000);
-    c.buy_plot(2, None); // 2 fish/day: the cat would never starve, so kill it directly.
+    c.buy_plot(3, None); // 2 fish/day: the cat would never starve, so kill it directly.
     c.kill(1);
-    assert_eq!(c.get_state().plots[2].owner, None);
+    assert_eq!(c.get_state().plots[3].owner, None);
 }
 
 #[test]
 fn plots_produce_fish_and_fish_rot_above_cap() {
     let mut c = setup(1);
     ctx(cat_acc(1), 0, 2_000);
-    c.buy_plot(2, None); // Sunny Windowsill: 2 fish/day
+    c.buy_plot(3, None); // Warm Laptop: 2 fish/day
     let mut now = 1_000;
     for _ in 0..12 {
         now += DAY_MS;
@@ -343,4 +345,29 @@ fn event_log_is_a_bounded_ring() {
     assert_eq!(evs.first().unwrap().id, c.get_state().event_count - 200);
     let tail = c.get_events(Some(c.get_state().event_count - 3), None);
     assert_eq!(tail.len(), 3);
+}
+
+#[test]
+fn night_hunt_uses_luck() {
+    let mut c = setup(3);
+    let mut cfg = c.get_state().config;
+    cfg.catch_chance_pct = 100;
+    ctx(admin(), 0, 2_000);
+    c.set_config(cfg);
+    ctx(bob(), 0, 1_000 + DAY_MS);
+    c.tick();
+    // Everyone caught one fish and ate one: still 3 fish each.
+    for id in 1..=3 {
+        assert_eq!(fish(&c, id), 3);
+    }
+    assert_eq!(c.get_events(None, Some(200)).iter().filter(|e| e.kind == "catch").count(), 3);
+}
+
+#[test]
+#[should_panic(expected = "Admin only")]
+fn only_admin_can_change_config() {
+    let mut c = setup(1);
+    let cfg = c.get_state().config;
+    ctx(alice(), 0, 2_000);
+    c.set_config(cfg);
 }

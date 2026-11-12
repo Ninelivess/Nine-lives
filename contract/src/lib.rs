@@ -73,6 +73,9 @@ pub struct Config {
     pub fish_cap: u32,
     /// Fish every cat is born with.
     pub starting_fish: u32,
+    /// Chance (0-100) that a cat catches a stray fish at night. Luck keeps deaths from all
+    /// happening on the same day.
+    pub catch_chance_pct: u8,
     pub max_open_offers: u32,
     pub offer_ttl_days: u32,
     /// Max NEAR a cat can move from its game wallet to its own account (gas) per call.
@@ -84,16 +87,17 @@ impl Default for Config {
         Self {
             max_cats: 9,
             day_length_ms: 60_000,
-            gas_tank: U128(NearToken::from_millinear(100).as_yoctonear()),
+            gas_tank: U128(NearToken::from_millinear(50).as_yoctonear()),
             min_stake: U128(NearToken::from_millinear(100).as_yoctonear()),
-            fish_base_price: U128(NearToken::from_millinear(10).as_yoctonear()),
-            plot_base_price: U128(NearToken::from_millinear(150).as_yoctonear()),
+            fish_base_price: U128(NearToken::from_millinear(5).as_yoctonear()),
+            plot_base_price: U128(NearToken::from_millinear(75).as_yoctonear()),
             hunger_limit: 3,
             fish_cap: 10,
             starting_fish: 3,
+            catch_chance_pct: 12,
             max_open_offers: 3,
             offer_ttl_days: 2,
-            max_refuel: U128(NearToken::from_millinear(50).as_yoctonear()),
+            max_refuel: U128(NearToken::from_millinear(25).as_yoctonear()),
         }
     }
 }
@@ -250,7 +254,7 @@ fn default_plots() -> Vec<Plot> {
     [
         ("Cardboard Box", 1),
         ("Laundry Basket", 1),
-        ("Sunny Windowsill", 2),
+        ("Sunny Windowsill", 1),
         ("Warm Laptop", 2),
         ("Fishmonger's Roof", 2),
     ]
@@ -582,6 +586,8 @@ impl NineLives {
         self.offers.remove(&offer_id);
         let message = clip(message);
         self.set_last_words(taker.id, &message);
+        // `text` = "<side of the accepted offer>|<taker's message>", so the taker is the buyer
+        // when the side is "sell" and the seller when it is "buy".
         self.push_event(
             "trade",
             Some(seller_id),
@@ -590,7 +596,7 @@ impl NineLives {
             offer.qty,
             offer.price.0,
             Some(offer_id),
-            message,
+            format!("{}|{}", side_name(offer.side), message),
         );
     }
 
@@ -696,8 +702,24 @@ impl NineLives {
             }
         }
 
-        // 2. Eating, hunger, death, rot
+        // 2. Night hunt: luck, decided by the block's random seed.
         let ids: Vec<u32> = self.cats.keys().copied().collect();
+        let seed = env::random_seed();
+        for id in ids.iter() {
+            let mut cat = self.cats.get(id).cloned().unwrap();
+            if !cat.alive {
+                continue;
+            }
+            let roll = env::sha256(&[seed.as_slice(), &id.to_le_bytes()].concat())[0] as u32 * 100 / 256;
+            if roll < self.config.catch_chance_pct as u32 {
+                cat.fish += 1;
+                let name = cat.name.clone();
+                self.cats.insert(*id, cat);
+                self.push_event("catch", Some(*id), None, Some("fish".into()), 1, 0, None, format!("{} caught a stray fish at night", name));
+            }
+        }
+
+        // 3. Eating, hunger, death, rot
         let mut ate = 0u32;
         let mut deaths: Vec<u32> = vec![];
         for id in ids {
@@ -728,12 +750,12 @@ impl NineLives {
             self.kill(id);
         }
 
-        // 3. Shop cools down
+        // 4. Shop cools down
         let base = yocto(self.config.fish_base_price);
         self.fish_price = (self.fish_price * 90 / 100).max(base);
         self.fish_sold_today = 0;
 
-        // 4. Expire old offers
+        // 5. Expire old offers
         let ttl = self.config.offer_ttl_days;
         let expired: Vec<u64> = self
             .offers
@@ -800,6 +822,16 @@ impl NineLives {
         require!(day_length_ms >= 10_000, "Day too short");
         self.config.day_length_ms = day_length_ms;
         self.push_event("config", None, None, None, 0, 0, None, format!("day_length_ms={}", day_length_ms));
+    }
+
+    /// Admin: tune the economy. Every change is logged as a public event.
+    pub fn set_config(&mut self, config: Config) {
+        self.assert_admin();
+        require!(config.day_length_ms >= 10_000, "Day too short");
+        require!(config.max_cats >= self.cats.len(), "Cannot go below existing cats");
+        self.config = config;
+        let text = near_sdk::serde_json::to_string(&self.config).unwrap();
+        self.push_event("config", None, None, None, 0, 0, None, text);
     }
 
     pub fn set_media_base(&mut self, media_base: String) {
