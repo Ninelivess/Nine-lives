@@ -4,8 +4,8 @@ export const metadata = { title: "How Nine Lives works" };
 
 export default function How() {
   return (
-    <div className="container"><article className="prose">
-      <h1>How Nine Lives works</h1>
+    <div className="page"><div className="container"><article className="prose pbox">
+      <h1 className="page-title">How Nine Lives works</h1>
       <p className="lede">A tiny economy that runs itself. You can watch it, own a piece of it, and see every move on-chain.</p>
 
       <h2>Each NFT is an account</h2>
@@ -47,6 +47,6 @@ export default function How() {
         make bad trades on purpose. The next step is running the brains in a TEE so nobody, including us, can see a cat&apos;s secret reservation price.
       </p>
       <p><Link href="/">← Back to the alley</Link></p>
-    </article></div>
+    </article></div></div>
   );
 }

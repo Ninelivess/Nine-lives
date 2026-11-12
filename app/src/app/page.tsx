@@ -1,77 +1,113 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { AlleySection, GraveyardSection, HowSection, MarketSection, Ticker } from "@/components/AlleyView";
-import { AlleyStory } from "@/components/AlleyStory";
-import type { GameEvent, WorldView } from "@/engine/types";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { AlleyScene } from "@/components/AlleyScene";
+import { CatsScreen, GazetteScreen, GraveyardScreen, HowScreen, Icon } from "@/components/AlleyView";
+import { Intro } from "@/components/Intro";
+import { PERSONALITIES } from "@/engine/personalities";
+import type { CatInfo } from "@/engine/types";
+import { useSnapshot } from "@/lib/snapshot";
 
-interface Snapshot {
-  contractId: string;
-  network: string;
-  day: number;
-  nowMs: number;
-  nextTickMs: number;
-  dayLengthMs: number;
-  world: WorldView;
-  events: GameEvent[];
-  error?: string;
+const LINES = [
+  "Nine AI cats live in one alley on NEAR.",
+  "Each one is an NFT and its own account.",
+  "They trade, bluff and must eat to survive.",
+  "Three hungry nights and the NFT becomes a ghost.",
+];
+
+function useTyped(lines: string[], start: number) {
+  const [text, setText] = useState("");
+  useEffect(() => {
+    let line = 0;
+    let i = 0;
+    let t: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      const full = lines[line];
+      i += 1;
+      setText(full.slice(0, i));
+      if (i < full.length) t = setTimeout(tick, 32);
+      else
+        t = setTimeout(() => {
+          line = (line + 1) % lines.length;
+          i = 0;
+          tick();
+        }, 2200);
+    };
+    t = setTimeout(tick, start);
+    return () => clearTimeout(t);
+  }, [lines, start]);
+  return text;
 }
 
-export default function LivePage() {
-  const [snap, setSnap] = useState<Snapshot | null>(null);
-  const [now, setNow] = useState(Date.now());
-  const offset = useRef(0);
+export default function Home() {
+  const snap = useSnapshot();
+  const typed = useTyped(LINES, 2900);
+  const [pick, setPick] = useState<{ cat: CatInfo; x: number; y: number } | null>(null);
 
+  // While someone watches, nudge the cats: each acts at most once per game day.
   useEffect(() => {
-    let alive = true;
-    const load = async () => {
-      try {
-        const r = await fetch("/api/snapshot", { cache: "no-store" });
-        const j = (await r.json()) as Snapshot;
-        if (!alive || j.error) return;
-        offset.current = j.nowMs - Date.now();
-        setSnap(j);
-      } catch {
-        /* keep the last snapshot */
-      }
-    };
-    load();
-    const poll = setInterval(load, 4000);
-    const clock = setInterval(() => setNow(Date.now()), 1000);
-    // While someone watches, nudge the cats: each cat acts once per day, the contract ends the day.
     const nudge = () => fetch("/api/advance", { method: "POST" }).catch(() => {});
     nudge();
-    const nudger = setInterval(nudge, 15000);
-    return () => {
-      alive = false;
-      clearInterval(poll);
-      clearInterval(clock);
-      clearInterval(nudger);
-    };
+    const t = setInterval(nudge, 15000);
+    return () => clearInterval(t);
   }, []);
 
-  const countdown = snap ? snap.nextTickMs - (now + offset.current) : null;
+  // On phones the alley scrolls sideways: start in the middle.
+  useEffect(() => {
+    const el = document.querySelector<HTMLElement>(".home-scene");
+    if (el && el.scrollWidth > el.clientWidth) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
+  }, []);
+
+  const world = snap?.world ?? null;
+  const live = pick ? world?.cats.find((c) => c.id === pick.cat.id) ?? pick.cat : null;
+  const title = live ? PERSONALITIES.find((p) => p.key === live.personality)?.title : "";
 
   return (
     <>
-      <AlleyStory world={snap?.world ?? null} countdownMs={countdown} />
-      {snap && <Ticker events={snap.events} world={snap.world} />}
-      <div className="container">
-        {snap ? (
-          <>
-            <AlleySection world={snap.world} events={snap.events} mode="live" />
-            <MarketSection world={snap.world} />
-            <GraveyardSection world={snap.world} mode="live" />
-            <HowSection />
-            <p className="muted small" style={{ marginTop: 40 }}>
-              Every number on this page is read from the{" "}
-              <a href={`https://testnet.nearblocks.io/address/${snap.contractId}`} target="_blank" rel="noreferrer">{snap.contractId}</a> contract every few seconds.
-            </p>
-          </>
-        ) : (
-          <p className="muted" style={{ padding: "80px 0" }}>Connecting to NEAR testnet…</p>
+      <Intro />
+      <section className="screen home in" id="alley" data-screen="alley">
+        <div className="home-scene">
+          <AlleyScene
+            world={world}
+            wakeDelay={2800}
+            onPick={(cat, r) => setPick({ cat, x: r.left + r.width / 2, y: r.top })}
+          />
+        </div>
+        <div className="home-card pbox">
+          <h1 className="home-title">Nine<br /><span className="gold">Lives</span></h1>
+          <p className="typing" aria-live="polite">{typed}</p>
+          <div className="btn-row">
+            <a className="btn btn-primary" href="#cats"><Icon name="cat" /> Meet the cats</a>
+            <Link className="btn" href="/simulate"><Icon name="ff" /> Fast-forward</Link>
+          </div>
+        </div>
+        {live && pick && (
+          <div
+            className="cat-dialog pbox"
+            style={{ left: Math.min(Math.max(12, pick.x - 180), (typeof window !== "undefined" ? window.innerWidth : 1200) - 372), top: Math.max(90, pick.y - 170) }}
+            role="dialog"
+            aria-label={live.name}
+          >
+            <button className="close" onClick={() => setPick(null)} aria-label="Close">x</button>
+            <b>{live.alive ? live.name : `Ghost of ${live.name}`}</b> <span className="label">{title}</span>
+            <p>{live.alive ? (live.lastWords ? `“${live.lastWords}”` : "…purr.") : `Starved on day ${live.diedDay}. Its NFT is a ghost now.`}</p>
+            <Link className="btn" href={`/cat/${live.id}`}><Icon name="paper" /> Open profile</Link>
+          </div>
         )}
-      </div>
+        <span className="scroll-down">scroll ▼ or press 2</span>
+        <span className="swipe-hint">◀ swipe the alley ▶</span>
+      </section>
+      {world && snap ? (
+        <>
+          <CatsScreen world={world} />
+          <GazetteScreen world={world} events={snap.events} />
+          <GraveyardScreen world={world} />
+          <HowScreen world={world} />
+        </>
+      ) : (
+        <section className="screen"><div className="container"><p className="muted">Connecting to NEAR testnet…</p></div></section>
+      )}
     </>
   );
 }

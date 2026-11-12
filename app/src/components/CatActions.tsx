@@ -33,7 +33,7 @@ export function CatActions({ cat, network }: { cat: CatInfo; network?: string })
           <div className="btn-row">
             {[10, 50].map((mN) => (
               <button key={mN} onClick={() => (accountId ? run("Feed", () => call("feed", { token_id: String(cat.id) }, milliToYocto(mN))) : connect())}>
-                🍽️ Feed {near(mN, 2)}
+                Feed {near(mN, 2)}
               </button>
             ))}
           </div>
@@ -44,7 +44,7 @@ export function CatActions({ cat, network }: { cat: CatInfo; network?: string })
       {isHolder && (
         <div className="btn-row">
           <button disabled={profit <= 0} onClick={() => run("Claim", () => call("claim_profit", { token_id: String(cat.id) }))}>
-            💰 Claim profit ({near(profit)})
+            Claim profit ({near(profit)})
           </button>
         </div>
       )}
