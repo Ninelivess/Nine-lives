@@ -4,6 +4,7 @@
 
 - **Live alley:** https://nine-lives-alley.vercel.app (NEAR testnet, updates every few seconds)
 - **Contract:** [`ninelives.testnet`](https://testnet.nearblocks.io/address/ninelives.testnet). Cats are `cat-1.ninelives.testnet` … `cat-9.ninelives.testnet`
+- **Buy cats with your AI:** MCP server at `https://nine-lives-alley.vercel.app/api/mcp` for Claude, ChatGPT and any MCP client ([guide](https://nine-lives-alley.vercel.app/agents))
 - **Tracks:** NFTs That Do Something · AI Swarms · Agent Economy · Games With Real Economies · AI Security & Defense
 - Built at NEAR HACKATHON (Nov 2026). Everything in this repo was written during the hackathon.
 
@@ -31,6 +32,7 @@ AI agents that hold money need two things: rules they cannot break, and a way fo
 | A cat pays gas from its own account. It can move up to 0.025 NEAR from its game wallet to its account (`refuel`). | `refuel` |
 | Anyone can end the day once it has passed. Nobody can end it early. | `tick` |
 | The NFT holder can claim profit (wallet above stake). When the NFT is sold, the right moves with it. A ghost's holder inherits what is left. | `claim_profit`, NEP-171 transfer |
+| The holder can list a cat for sale. Anyone, a person or an AI agent, buys it in one call: the NFT and the payment move together, extra deposit is refunded. A private transfer cancels the sale. | `list_cat`, `buy_cat`, `delist_cat`, `get_listings` |
 
 In simulations the first cat usually dies around day 20. Cats that own plots survive, and the alley settles at about 5–7 cats. Run `npm run simulate` to see it happen (see below).
 
@@ -63,13 +65,23 @@ cd app && npm ci && npm run simulate -- 40 7
 ```
 → It prints a day-by-day story (📣 offers, ↩️ counters, 🤝 trades, 😿 hunger, 👻 deaths) and a final table. With seed 7 after 40 days, Smokey dies on day 19, Pamuk and Pickles on day 21, Pasha on day 30 and Noodle on day 33. Mochi and Kaiser own every plot.
 
-**7. Run the contract tests.**
+**7. Let an AI agent shop for a cat.** Connect the MCP server to Claude Code:
+```bash
+claude mcp add --transport http nine-lives https://nine-lives-alley.vercel.app/api/mcp
+```
+→ Ask "Which Nine Lives cats are for sale? Prepare buying the cheapest living one." Claude calls `list_cats_for_sale` and `buy_cat`, and answers with an approval link (`/sign?action=buy&cat=N`) that opens your wallet. Nothing is signed by the server. Without Claude, the raw protocol works too:
+```bash
+curl -s https://nine-lives-alley.vercel.app/api/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_cats_for_sale","arguments":{}}}'
+```
+→ JSON with each listed cat, its price and a `buy_link`. An agent that holds its own NEAR key can complete the purchase itself: `npm run agent-buy -- <key.json>` (in `app/`) asks the MCP server what is for sale, takes `raw_function_call` from `buy_cat` and signs it. We ran it on testnet: `buyer.ninelives.testnet` bought the ghost of Pamuk this way.
+
+**8. Run the contract tests.**
 ```bash
 cd contract && cargo test
 ```
-→ `26 passed`. The tests cover atomic settlement, private counter-offers, starvation into a ghost, plots released on death, scraps feeding an empty bowl, profit following the NFT, the previous holder getting nothing, slippage limits, the bounded event log, admin-only config and moving NFT images to a new site.
+→ `32 passed`. The tests cover atomic settlement, private counter-offers, starvation into a ghost, plots released on death, scraps feeding an empty bowl, profit following the NFT, the previous holder getting nothing, slippage limits, the bounded event log, admin-only config, moving NFT images to a new site, and the marketplace (listing, buying, refunds, a private transfer cancelling a sale, selling a ghost).
 
-**8. Run your own alley (optional).** You need a funded testnet account (about 5 NEAR).
+**9. Run your own alley (optional).** You need a funded testnet account (about 5 NEAR).
 ```bash
 cd contract && cargo near build non-reproducible-wasm
 cd ../app && npm run deploy -- path/to/key.json      # {"accountId":"you.testnet","privateKey":"ed25519:..."}
@@ -85,6 +97,17 @@ npm run dev                                          # http://localhost:3000
 - **On-chain randomness.** Night hunts and scraps use `env::random_seed()`, so the operator cannot choose who gets lucky.
 - **Permissionless time.** `tick` can be called by anyone once the day is over. Our keeper uses a key that can only call `tick`.
 - **Readable history.** Each action emits a NEP-297 `EVENT_JSON` log, and the contract keeps the last 200 events in a ring buffer that the UI reads with `get_events`.
+
+## Buying cats through AI agents (MCP)
+
+`app/src/app/api/mcp/route.ts` is a stateless MCP server over Streamable HTTP (JSON-RPC: `initialize`, `tools/list`, `tools/call`, `ping`). We test it with the official `@modelcontextprotocol/sdk` client.
+
+| Tool | What it does |
+|---|---|
+| `alley_status`, `list_cats`, `get_cat`, `list_cats_for_sale`, `how_it_works` | Read the live alley (read-only) |
+| `buy_cat`, `sell_cat`, `delist_cat`, `feed_cat` | Prepare a transaction. Returns `approve_in_wallet` (a page where the human signs with their own wallet) and `raw_function_call` (receiver, method, args, deposit, gas) for agents that sign with their own key |
+
+The write tools never sign and the server holds no buyer keys, so an assistant cannot spend anyone's money on its own. Agent-to-agent trade still works: an agent with its own NEAR account signs `raw_function_call` (see `app/scripts/agent-buy.ts`).
 
 ## Architecture
 
@@ -102,7 +125,7 @@ npm run dev                                          # http://localhost:3000
    keys.ts (derive key per cat from MASTER_SEED)  world.ts (offline copy of the rules)
 ```
 
-- `contract/src/lib.rs`: the whole game, about 1,000 lines. `contract/src/tests.rs` has 26 unit tests.
+- `contract/src/lib.rs`: the whole game, about 1,000 lines. `contract/src/tests.rs` has 32 unit tests.
 - `app/src/engine/brain.ts`: a pure function, `(cat, world) → actions[]`, with a reason for every action.
 - `app/src/engine/personalities.ts`: the 9 archetypes. Details and sources are in [PERSONALITIES.md](PERSONALITIES.md).
 - `app/src/engine/world.ts`: the rules mirrored in TypeScript, used by `/simulate` and `npm run simulate`.
@@ -134,7 +157,7 @@ contract/            Rust smart contract + unit tests
 app/                 Next.js site, brains, simulator, scripts
   src/engine/        brain, personalities, world (sim), runner, rpc, keys, art
   src/app/           pages: / (live), /cat/[id], /simulate, /how; API routes
-  scripts/           deploy.ts, upgrade.ts, admin.ts, run-day.ts, simulate.ts, faucet-account.ts
+  scripts/           deploy.ts, upgrade.ts, admin.ts, list-cats.ts, run-day.ts, simulate.ts, test-buy.ts, agent-buy.ts
 PERSONALITIES.md     the nine archetypes and the research behind them
 ```
 

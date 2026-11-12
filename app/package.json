@@ -10,6 +10,7 @@
     "simulate": "tsx scripts/simulate.ts",
     "deploy": "tsx scripts/deploy.ts",
     "run-day": "tsx scripts/run-day.ts",
+    "agent-buy": "tsx scripts/agent-buy.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
