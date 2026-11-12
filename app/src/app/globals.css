@@ -168,3 +168,13 @@ a.cat-card:hover { transform: translateY(-2px); border-color: var(--accent); tex
   .cat-portrait { max-width: 220px; }
   .traits li { grid-template-columns: 120px minmax(0, 1fr) 40px; }
 }
+
+.wallet-btn, .btn-row button {
+  background: var(--card-2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px;
+  font: inherit; font-weight: 600; cursor: pointer;
+}
+.wallet-btn:hover, .btn-row button:hover:not(:disabled) { border-color: var(--accent); }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
+.btn-row button:disabled { opacity: 0.5; cursor: default; }
+.nav { align-items: center; }
+.status-line { overflow-wrap: anywhere; }

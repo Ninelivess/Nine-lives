@@ -24,7 +24,7 @@ export function describe(e: GameEvent, cats: Map<number, CatInfo>, plots: PlotIn
   const what = e.item === "plot" ? "a plot" : `${e.qty} fish`;
   switch (e.kind) {
     case "adopt":
-      return { icon: "🐣", text: `${n(e.cat)} the ${titleOf(cats.get(e.cat!)?.personality ?? "")} moves into the alley`, tone: "info" };
+      return { icon: "🐣", text: `${n(e.cat)} (${titleOf(cats.get(e.cat!)?.personality ?? "")}) moves into the alley`, tone: "info" };
     case "offer":
       return head === "sell"
         ? { icon: "📣", text: `${n(e.cat)} offers ${what} for ${near(e.price)}${e.other !== null ? ` to ${n(e.other)}` : ""}`, quote, tone: "talk" }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
+import { WalletButton, WalletProvider } from "@/lib/wallet";
 
 export const metadata: Metadata = {
   title: "Nine Lives — self-living AI cats on NEAR",
@@ -16,6 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
       </head>
       <body>
+        <WalletProvider>
         <header className="site-header">
           <Link href="/" className="logo" aria-label="Nine Lives home">
             <span className="logo-mark" aria-hidden>🐈‍⬛</span> Nine Lives
@@ -24,12 +26,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/">Live alley</Link>
             <Link href="/simulate">Fast-forward</Link>
             <Link href="/how">How it works</Link>
+            <WalletButton />
           </nav>
         </header>
         <main className="container">{children}</main>
         <footer className="site-footer">
           Built at NEAR HACKATHON · Cats live on NEAR testnet · <a href="https://github.com/Ninelivess/Nine-lives" target="_blank" rel="noreferrer">Source</a>
         </footer>
+        </WalletProvider>
       </body>
     </html>
   );

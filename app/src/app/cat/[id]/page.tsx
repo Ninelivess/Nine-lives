@@ -8,6 +8,7 @@ import { PERSONALITIES } from "@/engine/personalities";
 import type { GameEvent, Traits, WorldView } from "@/engine/types";
 import { Feed, explorer } from "@/components/AlleyView";
 import { near } from "@/lib/describe";
+import { CatActions } from "@/components/CatActions";
 
 interface Snapshot { contractId: string; network: string; world: WorldView; events: GameEvent[] }
 
@@ -96,8 +97,9 @@ export default function CatPage({ params }: { params: Promise<{ id: string }> })
               </ul>
             </>
           )}
-          <h3>For the NFT holder</h3>
-          <p className="small">The holder can take the cat&apos;s profit (wallet above stake). Take too much and the cat may starve. If the NFT is sold, this right moves with it.</p>
+          <h3>Help it, or cash in</h3>
+          <CatActions cat={cat} network={snap.network} />
+          <p className="small">The NFT holder can take the cat&apos;s profit (wallet above stake). Take too much and the cat may starve. If the NFT is sold, this right moves with it. From the command line:</p>
           <pre className="code">{`near contract call-function as-transaction ${snap.contractId} claim_profit json-args '{"token_id":"${cat.id}"}' prepaid-gas '30 Tgas' attached-deposit '0 NEAR' sign-as <holder>.testnet network-config testnet sign-with-keychain send`}</pre>
         </section>
         <section className="panel">
