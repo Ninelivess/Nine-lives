@@ -289,7 +289,12 @@ a.cat-card:hover { text-decoration: none; transform: translateY(-3px); border-co
   .hero { padding-top: 32px; }
   .hero-lede { font-size: 16px; }
   .eyebrow { font-size: 10px; letter-spacing: .14em; }
-  .cats { grid-template-columns: minmax(0, 1fr); }
+  .cats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .tile .px-cat { width: 64% !important; height: auto !important; aspect-ratio: 1; }
+  .cat-body { padding: 10px; gap: 8px; }
+  .cat-name b { font-size: 18px; }
+  .chip { font-size: 11px; padding: 2px 5px; }
+  .bubble { font-size: 12px; }
   .how-grid { grid-template-columns: minmax(0, 1fr); }
   .scene { height: 230px; }
   .scene-cat .px-cat { width: 40px !important; height: 40px !important; }
