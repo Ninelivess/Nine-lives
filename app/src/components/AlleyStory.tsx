@@ -112,7 +112,7 @@ export function AlleyStory({ world, countdownMs }: { world: WorldView | null; co
   const alive = cats.filter((c) => c.alive).length;
   const ghosts = cats.length - alive;
   const hungry = cats.filter((c) => c.alive && c.hunger > 0).length;
-  const talkers = [1, 4, 7];
+  const talkers = narrow ? [1, 4, 7] : [3, 5, 7];
 
   return (
     <div className="story" ref={ref}>

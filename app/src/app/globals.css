@@ -47,8 +47,8 @@ code { font-family: var(--mono); font-size: .85em; color: var(--green); backgrou
 .bracket::after { right: 0; bottom: 0; border-left: 0; border-top: 0; }
 
 /* ---------- header ---------- */
-.site-header { position: fixed; top: 0; left: 0; right: 0; z-index: 60; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 36px;
-  background: linear-gradient(180deg, rgba(6,7,13,.85), rgba(6,7,13,0)); }
+.site-header { position: fixed; top: 0; left: 0; right: 0; z-index: 60; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 36px;
+  background: rgba(6,7,13,.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,.05); }
 .logo { display: flex; align-items: center; gap: 10px; color: var(--text); font-family: var(--pixel); font-weight: 600; font-size: 18px; letter-spacing: .04em; white-space: nowrap; text-transform: uppercase; }
 .logo:hover { color: var(--text); }
 .nav { display: flex; align-items: center; gap: 26px; }
