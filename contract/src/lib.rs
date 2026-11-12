@@ -867,9 +867,21 @@ impl NineLives {
         self.push_event("config", None, None, None, 0, 0, None, text);
     }
 
+    /// Admin: move the NFT images to a new site. Rewrites `media` on every existing token too.
     pub fn set_media_base(&mut self, media_base: String) {
         self.assert_admin();
-        self.media_base = media_base;
+        self.media_base = media_base.trim_end_matches('/').to_string();
+        let ids: Vec<u32> = self.cats.keys().copied().collect();
+        if let Some(meta_map) = self.tokens.token_metadata_by_id.as_mut() {
+            for id in ids {
+                let token_id = id.to_string();
+                if let Some(mut meta) = meta_map.get(&token_id) {
+                    meta.media = Some(format!("{}/api/cat/{}/image", self.media_base, id));
+                    meta_map.insert(&token_id, &meta);
+                }
+            }
+        }
+        self.push_event("config", None, None, None, 0, 0, None, format!("media_base={}", self.media_base));
     }
 
     // ------------------------------------------------------------------

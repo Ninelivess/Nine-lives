@@ -9,7 +9,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { PERSONALITIES } from "../src/engine/personalities";
 import { catKeyPair } from "../src/engine/keys";
 
-const [keyFile, mediaBase = "https://nine-lives.vercel.app"] = process.argv.slice(2);
+const [keyFile, mediaBase = "https://nine-lives-alley.vercel.app"] = process.argv.slice(2);
 if (!keyFile) throw new Error("Usage: deploy.ts <admin-key-json> [media-base-url]");
 const { accountId, privateKey } = JSON.parse(readFileSync(keyFile, "utf8"));
 const rpcUrl = process.env.NEXT_PUBLIC_NEAR_RPC || "https://rpc.testnet.near.org";

@@ -393,3 +393,12 @@ fn excess_fish_feed_an_empty_bowl() {
     assert!(evs.iter().any(|e| e.kind == "scraps" && e.cat == Some(2) && e.other == Some(1)));
     assert!(evs.iter().any(|e| e.kind == "rot" && e.qty == 9));
 }
+
+#[test]
+fn media_base_moves_existing_nft_images() {
+    let mut c = setup(2);
+    ctx(admin(), 0, 2_000);
+    c.set_media_base("https://alley.example/".into());
+    let media = c.nft_token("2".into()).unwrap().metadata.unwrap().media.unwrap();
+    assert_eq!(media, "https://alley.example/api/cat/2/image");
+}

@@ -67,7 +67,7 @@ cd app && npm ci && npm run simulate -- 40 7
 ```bash
 cd contract && cargo test
 ```
-→ `25 passed`. The tests cover atomic settlement, private counter-offers, starvation into a ghost, plots released on death, scraps feeding an empty bowl, profit following the NFT, the previous holder getting nothing, slippage limits, the bounded event log and admin-only config.
+→ `26 passed`. The tests cover atomic settlement, private counter-offers, starvation into a ghost, plots released on death, scraps feeding an empty bowl, profit following the NFT, the previous holder getting nothing, slippage limits, the bounded event log, admin-only config and moving NFT images to a new site.
 
 **8. Run your own alley (optional).** You need a funded testnet account (about 5 NEAR).
 ```bash
@@ -102,7 +102,7 @@ npm run dev                                          # http://localhost:3000
    keys.ts (derive key per cat from MASTER_SEED)  world.ts (offline copy of the rules)
 ```
 
-- `contract/src/lib.rs`: the whole game, about 1,000 lines. `contract/src/tests.rs` has 25 unit tests.
+- `contract/src/lib.rs`: the whole game, about 1,000 lines. `contract/src/tests.rs` has 26 unit tests.
 - `app/src/engine/brain.ts`: a pure function, `(cat, world) → actions[]`, with a reason for every action.
 - `app/src/engine/personalities.ts`: the 9 archetypes. Details and sources are in [PERSONALITIES.md](PERSONALITIES.md).
 - `app/src/engine/world.ts`: the rules mirrored in TypeScript, used by `/simulate` and `npm run simulate`.
@@ -134,7 +134,7 @@ contract/            Rust smart contract + unit tests
 app/                 Next.js site, brains, simulator, scripts
   src/engine/        brain, personalities, world (sim), runner, rpc, keys, art
   src/app/           pages: / (live), /cat/[id], /simulate, /how; API routes
-  scripts/           deploy.ts, upgrade.ts, run-day.ts, simulate.ts, faucet-account.ts
+  scripts/           deploy.ts, upgrade.ts, admin.ts, run-day.ts, simulate.ts, faucet-account.ts
 PERSONALITIES.md     the nine archetypes and the research behind them
 ```
 
